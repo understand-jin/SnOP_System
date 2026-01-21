@@ -78,8 +78,8 @@ RISK_BUCKETS = ["폐기확정(유효기한 지남)", "3개월 미만", "6개월 
 # 데이터 로드 로직
 # =====================================================
 df = None
-if "data_registry" in st.session_state and st.session_state["data_registry"].get("selected_id"):
-    reg = st.session_state["data_registry"]
+if "stock_data_registry" in st.session_state and st.session_state["stock_data_registry"].get("selected_id"):
+    reg = st.session_state["stock_data_registry"]
     did = reg["selected_id"]
     meta = reg["datasets"].get(did)
     if meta:
