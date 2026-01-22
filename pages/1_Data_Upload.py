@@ -118,24 +118,30 @@ if st.button("✅ 업로드 파일 로드"):
         st.success("모든 파일 로딩 완료! 이제 '테이블 관리' 또는 '시각화' 페이지로 이동하세요.")
 
 # -----------------------------
-# 현재 세션 DF 요약
+# 현재 세션 DF 요약 (에러 방지 수정 버전)
 # -----------------------------
 with st.expander("📦 현재 세션에 저장된 DF 목록", expanded=False):
     all_dfs = st.session_state.get("dfs", {})
     
-    if not all_dfs or all(not v for v in all_dfs.values()):
-        st.write("아직 저장된 DF가 없습니다.")
+    # 1. 아예 데이터가 없거나, 'dfs' 가방이 비어있는지 확인
+    if not all_dfs:
+        st.write("아직 저장된 데이터가 없습니다.")
     else:
-        # 월별로 어떤 파일들이 들어있는지 리스트로 만듭니다.
         summary_data = []
+        # 2. 월(month)별로 순회
         for month, files in all_dfs.items():
-            for filename, df in files.items():
-                summary_data.append({
-                    "데이터 기준 월": month,
-                    "파일명": filename,
-                    "행(Rows)": len(df),
-                    "열(Cols)": df.shape[1]
-                })
+            # month_files가 딕셔너리인지 확인 (방어적 코드)
+            if isinstance(files, dict):
+                for filename, df in files.items():
+                    summary_data.append({
+                        "데이터 기준 월": month,
+                        "파일명": filename,
+                        "행(Rows)": len(df) if hasattr(df, '__len__') else 0,
+                        "열(Cols)": df.shape[1] if hasattr(df, 'shape') else 0
+                    })
         
+        # 3. 데이터가 모였다면 표로 표시
         if summary_data:
             st.dataframe(pd.DataFrame(summary_data), use_container_width=True)
+        else:
+            st.write("선택된 월에 업로드된 파일이 없습니다.")

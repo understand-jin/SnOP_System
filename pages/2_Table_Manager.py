@@ -24,12 +24,16 @@ with sel_col1:
 
 with sel_col2:
     # 2단계: 선택된 월 내부의 '파일' 목록 가져오기
-    month_dfs = all_data[selected_month]
-    if not month_dfs:
+    month_dfs = all_data.get(selected_month, {}) # .get()을 사용하여 안전하게 추출
+    
+    # ✅ 수정: if not month_dfs 대신 딕셔너리 길이를 직접 체크
+    if len(month_dfs) == 0:
         st.error(f"{selected_month}에 저장된 파일이 없습니다.")
         st.stop()
     
-    selected_file = st.selectbox("📄 확인할 파일(DataFrame) 선택", list(month_dfs.keys()))
+    # 해당 월의 파일 목록을 리스트로 변환하여 selectbox 생성
+    file_list = list(month_dfs.keys())
+    selected_file = st.selectbox("📄 확인할 파일(DataFrame) 선택", file_list)
 
 # 최종적으로 선택된 데이터프레임
 df = month_dfs[selected_file]
