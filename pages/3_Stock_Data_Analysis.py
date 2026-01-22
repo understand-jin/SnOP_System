@@ -7,6 +7,7 @@ import matplotlib.font_manager as fm
 import os
 import plotly.express as px
 import matplotlib.ticker as ticker
+import plotly.graph_objects as go
 
 # ✅ 페이지 설정
 st.set_page_config(page_title="Stock Data Analysis", layout="wide")
@@ -500,103 +501,6 @@ def render_future_risk_simulation(final_df):
             st.warning(f"⚠️ **시뮬레이션 요약**: 이 배치는 **{target_date_180.strftime('%Y년 %m월 %d일')}**에 위험 구간(D-180)에 진입합니다. "
                        f"평균 판매 속도 유지 시 해당 시점에 약 **{target_row['예비위험재고수량']:,.0f}**개의 재고가 소진되지 못하고 남을 것으로 예측됩니다.")
 
-# def render_future_risk_simulation(final_df):
-#     st.divider()
-#     st.subheader("🔮 향후 유효기한 리스크 시뮬레이션 (판매 속도 반영)")
-#     st.info("실제 판매 속도(3평판)를 기반으로 유효기한이 180일 남은 시점의 예상 잔고를 산출합니다.")
-
-#     # 1. 데이터 필터링
-#     sim_targets = ["12개월 미만", "12개월 이상"]
-#     df_sim = final_df[
-#         (final_df[BUCKET_COL].isin(sim_targets)) & 
-#         (final_df['3평판'] >= 1)
-#     ].copy()
-
-#     if df_sim.empty:
-#         st.warning("시뮬레이션 대상 자재(12개월 전후 & 판매실적 존재)가 없습니다.")
-#         return
-
-#     # 2. 시뮬레이션 로직
-#     def run_simulation(row):
-#         days_left = row[DAYS_COL]
-#         qty_left = row[QTY_SRC_COL]
-#         monthly_sales = row['3평판']
-#         while days_left > 180 and qty_left > 0:
-#             days_left -= 30
-#             qty_left -= monthly_sales
-#         return max(0, qty_left)
-
-#     df_sim['예비위험재고수량'] = df_sim.apply(run_simulation, axis=1)
-#     df_sim['예비위험금액'] = df_sim['예비위험재고수량'] * df_sim[UNIT_COST_COL]
-    
-#     risk_summary = df_sim[df_sim['예비위험재고수량'] > 0].copy()
-    
-#     # 상단 요약 지표
-#     m1, m2, m3 = st.columns(3)
-#     m1.metric("탐지된 자재 수", f"{risk_summary[MAT_COL].nunique()}종")
-#     m2.metric("예상 위험 금액", f"₩{risk_summary['예비위험금액'].sum():,.0f}")
-#     m3.info("💡 180일 시점에 재고가 남는 자재만 리스트업됩니다.")
-
-#     # 상세 리스트
-#     st.write("#### 📋 예비 위험 탐지 상세 리스트")
-#     display_cols = [MAT_COL, MAT_NAME_COL, BATCH_COL, DAYS_COL, '3평판', '예비위험재고수량', '예비위험금액']
-#     st.dataframe(risk_summary[display_cols].sort_values('예비위험금액', ascending=False), use_container_width=True)
-
-#     st.write("---")
-
-#     # 자재별 심층 분석
-#     st.write("#### 📈 자재별 소진 시뮬레이션 시각화")
-#     risk_summary['display_label'] = risk_summary[MAT_COL].astype(str) + " | " + risk_summary[MAT_NAME_COL].astype(str)
-#     selected_mat_label = st.selectbox("상세 분석할 자재를 선택하세요", options=risk_summary['display_label'].unique())
-
-#     if selected_mat_label:
-#         match_mask = risk_summary['display_label'] == selected_mat_label
-#         matched_df = risk_summary[match_mask]
-
-#         if not matched_df.empty:
-#             target_row = matched_df.iloc[0]
-            
-#             # [날짜 계산]
-#             today = datetime.now()
-#             target_date_180 = today + pd.Timedelta(days=int(target_row[DAYS_COL]) - 180)
-#             expiry_date = today + pd.Timedelta(days=int(target_row[DAYS_COL]))
-
-#             # [정보 박스 수정] - 에러 해결 지점
-#             c1, c2, c3, c4 = st.columns(4)
-#             with c1: st.write("**현재 재고**"); st.write(f"{target_row[QTY_SRC_COL]:,.0f}")
-#             with c2: st.write("**월평균 판매(3평판)**"); st.write(f"{target_row['3평판']:,.2f}")
-#             with c3: st.write("**위험 도달일 (D-180)**"); st.write(f"{target_date_180.strftime('%Y-%m-%d')}")
-#             with c4: st.write("**유효기한 만료일**"); st.write(f"{expiry_date.strftime('%Y-%m-%d')}")
-
-#             # 시뮬레이션 그래프 데이터 생성
-#             history_days = []
-#             history_qty = []
-#             curr_days = target_row[DAYS_COL]
-#             curr_qty = target_row[QTY_SRC_COL]
-
-#             while curr_days > -30 and curr_qty > -target_row['3평판']:
-#                 history_days.append(curr_days)
-#                 history_qty.append(max(0, curr_qty))
-#                 curr_days -= 30
-#                 curr_qty -= target_row['3평판']
-
-#             # 그래프 시각화
-#             fig, ax = plt.subplots(figsize=(12, 5))
-#             ax.plot(history_days, history_qty, marker='o', color='#e74c3c', linewidth=2, label='예상 재고 흐름')
-#             ax.axvline(x=180, color='blue', linestyle='--', alpha=0.6, label='위험 경계 (D-180)')
-#             ax.fill_between(history_days, history_qty, color='#e74c3c', alpha=0.1)
-
-#             ax.set_title(f"[{selected_mat_label}] 재고 소진 시뮬레이션", fontsize=14, pad=15)
-#             ax.set_xlabel("남은 유효기한 (Days)")
-#             ax.set_ylabel("재고 수량")
-#             ax.invert_xaxis()
-#             ax.legend()
-#             ax.yaxis.set_major_formatter(ticker.FuncFormatter(lambda x, p: format(int(x), ',')))
-            
-#             st.pyplot(fig)
-            
-#             st.warning(f"⚠️ **시뮬레이션 요약**: 이 배치는 **{target_date_180.strftime('%Y년 %m월 %d일')}**에 위험 구간(유효기한 180일 미만)에 진입하며, "
-#                        f"그 시점 예상 잔고는 **{target_row['예비위험재고수량']:,.0f}**개입니다.")
 
 render_future_risk_simulation(final_df)
 
