@@ -299,7 +299,7 @@ fig_map = px.choropleth(
     color=VALUE_COL,
     hover_name="Country",
     hover_data={VALUE_COL: ':,.0f', '비중(%)': ':.1f%', 'Country_Map': False},
-    color_continuous_scale="Reds",
+    color_continuous_scale="Blues",
     title=f"🌐 {selected_year} {selected_month} 글로벌 거점별 재고 가치 합계",
     labels={VALUE_COL: "재고 가치(₩)", "비중(%)": "글로벌 비중"}
 )
