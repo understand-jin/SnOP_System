@@ -77,6 +77,25 @@ def build_final_df(dfs_dict):
     
     return merged
 
+# # =====================================================
+# # 🚀 메인 로직 시작
+# # =====================================================
+# all_dfs_store = st.session_state.get("dfs", {})
+
+# if not all_dfs_store:
+#     st.warning("먼저 업로드 페이지에서 데이터를 업로드해 주세요.")
+#     st.stop()
+
+# # --- 📅 분석 대상 월 선택 ---
+# available_months = list(all_dfs_store.keys())
+# selected_month = st.selectbox("🔍 분석할 데이터 기준 월을 선택하세요", options=available_months)
+
+# # 선택된 월의 데이터 뭉치(3개 파일) 가져오기
+# target_dfs = all_dfs_store[selected_month]
+
+# # 최종 가공 데이터 생성
+# final_df = build_final_df(target_dfs)
+
 # =====================================================
 # 🚀 메인 로직 시작
 # =====================================================
@@ -90,11 +109,25 @@ if not all_dfs_store:
 available_months = list(all_dfs_store.keys())
 selected_month = st.selectbox("🔍 분석할 데이터 기준 월을 선택하세요", options=available_months)
 
-# 선택된 월의 데이터 뭉치(3개 파일) 가져오기
+# 해당 월의 데이터 뭉치 가져오기
 target_dfs = all_dfs_store[selected_month]
 
+# -----------------------------------------------------
+# ✅ [추가] 현재 분석에 사용되는 파일 정보 표시
+# -----------------------------------------------------
+with st.expander(f"📁 {selected_month} 분석 대상 파일 확인", expanded=False):
+    if target_dfs:
+        file_info = []
+        for f_name, f_df in target_dfs.items():
+            file_info.append({"파일명": f_name, "행 수": len(f_df), "컬럼 수": f_df.shape[1]})
+        st.table(pd.DataFrame(file_info))
+    else:
+        st.error("해당 월에 업로드된 파일이 없습니다.")
+        st.stop()
+
 # 최종 가공 데이터 생성
-final_df = build_final_df(target_dfs)
+with st.spinner(f"{selected_month} 데이터를 통합 분석 중입니다..."):
+    final_df = build_final_df(target_dfs)
 
 # -----------------------------------------------------
 # 1️⃣ 기간별 위험 자재 요약 (탭)
