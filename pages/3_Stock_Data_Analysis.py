@@ -249,7 +249,7 @@ def render_batch_analysis_section(final_df, MAT_COL, MAT_NAME_COL, BATCH_COL, BU
             chart_df = view_df[view_df[BUCKET_COL].isin(chart_targets)].copy()
 
             if not chart_df.empty:
-                fig, ax = plt.subplots(figsize=(10, 4)) 
+                fig, ax = plt.subplots(figsize=(8, 2.5)) 
                 sns.barplot(
                     data=chart_df, 
                     x=BATCH_COL, 
@@ -483,7 +483,7 @@ def render_future_risk_simulation(final_df):
                 curr_qty -= sales_per_tick
 
             # 그래프 시각화
-            fig, ax = plt.subplots(figsize=(10, 4))
+            fig, ax = plt.subplots(figsize=(8, 2.5))
             ax.plot(history_days, history_qty, marker='o', color='#e74c3c', linewidth=2, label='예상 재고 흐름')
             ax.axvline(x=180, color='blue', linestyle='--', alpha=0.6, label='위험 경계 (D-180)')
             ax.fill_between(history_days, history_qty, color='#e74c3c', alpha=0.1)
