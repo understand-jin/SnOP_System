@@ -483,7 +483,7 @@ def render_future_risk_simulation(final_df):
                 curr_qty -= sales_per_tick
 
             # 그래프 시각화
-            fig, ax = plt.subplots(figsize=(12, 5))
+            fig, ax = plt.subplots(figsize=(10, 4))
             ax.plot(history_days, history_qty, marker='o', color='#e74c3c', linewidth=2, label='예상 재고 흐름')
             ax.axvline(x=180, color='blue', linestyle='--', alpha=0.6, label='위험 경계 (D-180)')
             ax.fill_between(history_days, history_qty, color='#e74c3c', alpha=0.1)
