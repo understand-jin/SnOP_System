@@ -495,11 +495,14 @@ def render_future_risk_simulation(final_df):
             ax.legend()
             ax.yaxis.set_major_formatter(ticker.FuncFormatter(lambda x, p: format(int(x), ',')))
             
+            st.warning(f"⚠️ **시뮬레이션 요약**: 이 배치는 **{target_date_180.strftime('%Y년 %m월 %d일')}**에 위험 구간(D-180)에 진입합니다. "
+                       f"평균 판매 속도 유지 시 해당 시점에 약 **{target_row['예비위험재고수량']:,.0f}**개의 재고가 소진되지 못하고 남을 것으로 예측됩니다.")
+            
             st.pyplot(fig)
             
             # 최종 코멘트
-            st.warning(f"⚠️ **시뮬레이션 요약**: 이 배치는 **{target_date_180.strftime('%Y년 %m월 %d일')}**에 위험 구간(D-180)에 진입합니다. "
-                       f"평균 판매 속도 유지 시 해당 시점에 약 **{target_row['예비위험재고수량']:,.0f}**개의 재고가 소진되지 못하고 남을 것으로 예측됩니다.")
+            # st.warning(f"⚠️ **시뮬레이션 요약**: 이 배치는 **{target_date_180.strftime('%Y년 %m월 %d일')}**에 위험 구간(D-180)에 진입합니다. "
+            #            f"평균 판매 속도 유지 시 해당 시점에 약 **{target_row['예비위험재고수량']:,.0f}**개의 재고가 소진되지 못하고 남을 것으로 예측됩니다.")
 
 
 render_future_risk_simulation(final_df)
