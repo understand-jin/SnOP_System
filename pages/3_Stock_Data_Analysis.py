@@ -6,8 +6,6 @@ import seaborn as sns
 import matplotlib.font_manager as fm
 import os
 
-# st.set_page_config(page_title="S&OP - Data Analysis", layout="wide")
-# st.title("📈 Data Analysis (Stock)")
 # ✅ 페이지 브라우저 탭 이름과 레이아웃 설정
 st.set_page_config(page_title="Stock Data Analysis", layout="wide")
 
@@ -35,7 +33,7 @@ BUCKET_COL = "expiry_bucket"
 DAYS_COL = "days_to_expiry"
 
 # =====================================================
-# ✅ 환경 설정 (폰트 등)
+# ✅ 환경 설정 (폰트 등) 시각화할 때 한국어 깨짐 방지 위해...
 # =====================================================
 def set_korean_font():
     font_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "assets", "fonts", "NanumGothic-Regular.ttf"))
@@ -50,7 +48,7 @@ set_korean_font()
 sns.set_theme(style="whitegrid", font=plt.rcParams["font.family"])
 
 # =====================================================
-# 🛠️ 데이터 처리 함수
+# 🛠️ 데이터 처리 함수 merged가 최종 1번, 2번, 3번 데이터 병합한 것임
 # =====================================================
 def to_numeric_safe(s): return pd.to_numeric(s, errors="coerce").fillna(0)
 
@@ -61,10 +59,12 @@ def build_final_df(dfs):
     tmp["기말(금액)합계"] = to_numeric_safe(tmp["기말(금액)합계"])
     unit_cost_df = tmp.groupby(MAT_COL, as_index=False).sum()
     unit_cost_df[UNIT_COST_COL] = unit_cost_df.apply(lambda r: r["기말(금액)합계"] / r["기말(수량)"] if r["기말(수량)"] > 0 else 0, axis=1)
+    # 여기까지 단위원가 계산 완료함 -> unit_cost_df에 해당 내용 저장되어 있음
     
     df_stock = dfs[STOCK_DF_KEY]
     df_expiry = dfs[EXPIRY_DF_KEY][[BATCH_COL, EXPIRY_COL]].drop_duplicates(subset=[BATCH_COL])
     merged = df_stock.merge(df_expiry, on=BATCH_COL, how="left")
+    # merged에 2번 3번 병합한 DF
     
     merged[QTY_SRC_COL] = to_numeric_safe(merged[QTY_SRC_COL])
     merged = merged[merged[QTY_SRC_COL] > 0].copy()
@@ -78,12 +78,13 @@ def build_final_df(dfs):
         if days <= 0: return "폐기확정(유효기한 지남)"
         if days <= 90: return "3개월 미만"
         if days <= 180: return "6개월 미만"
-        if days <= 210: return "7개월 미만"  # ✅ 7개월 추가
+        if days <= 210: return "7개월 미만"  
         if days <= 270: return "9개월 미만"
         if days <= 365: return "12개월 미만"
         return "12개월 이상"
     
     merged[BUCKET_COL] = merged[DAYS_COL].apply(bucketize)
+    #여기까지 merged에 유효기한, 유효기간 얼마 남았는지 DF 완료
     merged = merged.merge(unit_cost_df[[MAT_COL, UNIT_COST_COL]], on=MAT_COL, how="left")
     merged[UNIT_COST_COL] = merged[UNIT_COST_COL].fillna(0)
     merged[VALUE_COL] = merged[QTY_SRC_COL] * merged[UNIT_COST_COL]
@@ -100,11 +101,12 @@ if not dfs:
 
 final_df = build_final_df(dfs)
 
+
 # -----------------------------------------------------
 # 1️⃣ [우선 확인] 위험 기간별 요약 (6/7/9개월 탭)
 # -----------------------------------------------------
 st.subheader("🚨 기간별 위험 자재 요약")
-st.write("의사결정이 필요한 위험 구간을 선택하세요. (기본 3개월 데이터 포함)")
+st.write("의사결정이 필요한 위험 구간을 선택하세요.")
 
 # 탭 구성 변경
 tab6, tab7, tab9 = st.tabs(["⚠️ 6개월 미만", "🔔 7개월 미만", "ℹ️ 9개월 미만"])
@@ -141,7 +143,7 @@ display_risk_summary(risk_base + ["6개월 미만", "7개월 미만", "9개월 �
 st.divider()
 
 # -----------------------------------------------------
-# 2️⃣ 자재-배치 단위 상세 분석 (시각화: 3개월 제외)
+# 2️⃣ 자재-배치 단위 상세 분석 
 # -----------------------------------------------------
 st.subheader("🔍 자재-배치별 상세 분석 (6/7/9개월 집중)")
 
@@ -175,6 +177,7 @@ if not df_risk_all.empty:
     v_disp[VALUE_COL] = v_disp[VALUE_COL].map('{:,.0f}'.format)
     v_disp[QTY_SRC_COL] = v_disp[QTY_SRC_COL].map('{:,.0f}'.format)
     st.dataframe(v_disp, use_container_width=True)
+    #여기까지 테이블 보여줌 화면에서
 
     # 📊 시각화: 3개월 미만 및 폐기확정 제외 (6, 7, 9개월만 표시)
     if not show_all_batches:
@@ -185,7 +188,7 @@ if not df_risk_all.empty:
         if not chart_df.empty:
             fig, ax = plt.subplots(figsize=(12, 5)) 
             sns.barplot(
-                data=chart_df.head(15), 
+                data=chart_df, 
                 x=BATCH_COL, 
                 y=VALUE_COL, 
                 hue=BUCKET_COL, 
@@ -197,32 +200,36 @@ if not df_risk_all.empty:
             )
             
             ax.set_title(f"📍 [{selected_label}] 배치별 상세 가치 분석 (6/7/9개월 미만)", fontsize=15, pad=20)
-            ax.set_xlabel("배치 번호 (Batch No.)", fontsize=12)
+            ax.set_xlabel("배치 번호", fontsize=12)
             ax.set_ylabel("재고 가치 (Stock Value)", fontsize=12)
 
             import matplotlib.ticker as ticker
             ax.yaxis.set_major_formatter(ticker.FuncFormatter(lambda x, p: format(int(x), ',')))
+            # 천 단위 콤마 만들어서 읽기 편하게 만들어줌 
             
             # 범례 다시 활성화 (구간 확인용)
             ax.legend(title="위험 구간", bbox_to_anchor=(1.05, 1), loc='upper left')
             
             sns.despine()
-            plt.xticks(rotation=30, ha="right")
+            #오른쪽과 위쪽 테두리 선 지워줌
+            plt.xticks(rotation=0, ha="right")
             plt.tight_layout()
+            #간격 자동 조정
             
             st.pyplot(fig, use_container_width=True)
+            #streamlit 화면에 출력
         else:
             st.info("💡 선택한 자재에는 6/7/9개월 미만에 해당하는 배치가 없습니다. (3개월 미만 또는 폐기 대상만 존재)")
 else:
     st.info("관리 대상 위험 재고가 없습니다.")
 
 # 데이터 등록
-if "stock_data_registry" not in st.session_state:
-    st.session_state["stock_data_registry"] = {"datasets": {}, "selected_id": None}
+if "stock_data" not in st.session_state:
+    st.session_state["stock_data"] = {"datasets": {}, "selected_id": None}
 
 did = f"stock_final_{datetime.now().strftime('%Y%m%d')}"
-st.session_state["stock_data_registry"]["datasets"][did] = {"df": final_df}
-st.session_state["stock_data_registry"]["selected_id"] = did
+st.session_state["stock_data"]["datasets"][did] = {"df": final_df}
+st.session_state["stock_data"]["selected_id"] = did
 
 
 
