@@ -389,7 +389,7 @@ render_country_stock_analysis(final_df, VALUE_COL, BUCKET_COL, selected_year, se
 def render_future_risk_simulation(final_df):
     st.divider()
     st.subheader("🔮 향후 유효기한 리스크 시뮬레이션 (판매 속도 반영)")
-    st.info("실제 판매 속도(3평판)를 기반으로 유효기한이 180일 남은 시점의 예상 잔고를 산출합니다.")
+    st.info("실제 판매 속도(3평판)를 기반으로 유효기한이 180일(6개월) 남은 시점의 예상 잔고를 산출합니다.")
 
     # 1. 데이터 필터링: 12개월 전후이면서 판매 실적(3평판)이 있는 데이터
     sim_targets = ["12개월 미만", "12개월 이상"]
@@ -423,7 +423,7 @@ def render_future_risk_simulation(final_df):
     m1, m2, m3 = st.columns(3)
     m1.metric("탐지된 위험 배치 수", f"{len(risk_summary)}개")
     m2.metric("예상 위험 금액 (합계)", f"₩{risk_summary['예비위험금액'].sum():,.0f}")
-    m3.info("💡 180일 시점에 재고가 남는 배치만 리스트업됩니다.")
+    m3.info("💡 180일(6개월) 시점에 재고가 남는 배치만 리스트업됩니다.")
 
     # --- [섹션 2] 상세 리스트 ---
     st.write("#### 📋 예비 위험 탐지 상세 리스트 (배치 단위)")
@@ -447,7 +447,7 @@ def render_future_risk_simulation(final_df):
         # 2단계: 선택한 자재 내의 배치 선택
         mat_only_df = risk_summary[risk_summary['mat_label'] == selected_mat]
         selected_batch = st.selectbox(
-            "2. 상세 확인 기수(Batch)를 선택하세요", 
+            "2. 상세 확인 배치(Batch)를 선택하세요", 
             options=mat_only_df[BATCH_COL].unique(),
             help="동일 자재라도 배치별 유효기한이 다르므로 개별 확인이 필요합니다."
         )
