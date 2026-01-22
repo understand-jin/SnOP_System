@@ -144,7 +144,7 @@ def display_risk_summary(target_buckets, tab_obj, title):
                 disp = summary.copy()
                 disp[VALUE_COL] = disp[VALUE_COL].map('{:,.0f}'.format)
                 disp[QTY_SRC_COL] = disp[QTY_SRC_COL].map('{:,.0f}'.format)
-                st.dataframe(disp, use_container_width=True, height=200)
+                st.dataframe(disp, use_container_width=True, height=400)
 
 risk_base = ["폐기확정(유효기한 지남)", "3개월 미만"]
 display_risk_summary(risk_base + ["6개월 미만"], tab6, "6개월 미만")
@@ -197,7 +197,7 @@ def render_batch_analysis_section(final_df, MAT_COL, MAT_NAME_COL, BATCH_COL, BU
             chart_df = view_df[view_df[BUCKET_COL].isin(chart_targets)].copy()
 
             if not chart_df.empty:
-                fig, ax = plt.subplots(figsize=(12, 5)) 
+                fig, ax = plt.subplots(figsize=(10, 4)) 
                 sns.barplot(
                     data=chart_df, 
                     x=BATCH_COL, 
