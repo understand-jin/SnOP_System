@@ -15,15 +15,12 @@ st.title("📥 데이터 업로드")
 
 st.markdown(
     """
-- 엑셀(.xlsx / .xls)과 CSV 파일을 업로드하면  
-- **표 영역 자동 추출 + 헤더 자동 보정**을 적용하여  
-- DataFrame으로 변환 후 세션에 저장합니다.
+- 엑셀/CSV 파일을 업로드하면 **연도별/월별 폴더**에 데이터를 분류하여 저장합니다.
+- 저장 구조: `연도` > `월` > `파일명`
 """
 )
 
-
-
-# -----------------------------
+# ----------------------------
 # 업로드 UI
 # -----------------------------
 uploaded_files = st.file_uploader(
@@ -33,33 +30,48 @@ uploaded_files = st.file_uploader(
 )
 
 # -----------------------------
-# 세션 저장소 초기화
+# 🚀 연도 및 월 선택 UI
 # -----------------------------
-# --- 🚀 [추가] 월 선택 UI ---
-st.divider() # 시각적 구분선
-col1, col2 = st.columns([1, 2])
+st.divider()
+col1, col2 = st.columns(2)
+
 with col1:
-    # 현재 월을 기본값으로 설정 (예: 1월)
-    target_month = st.selectbox(
-        "📅 데이터 기준 월 선택",
-        options=[f"{i}월" for i in range(1, 13)],
-        index=datetime.now().month - 1  # 현재 달을 기본값으로
+    # 2023년부터 2040년까지 선택 가능
+    current_year = datetime.now().year
+    target_year = st.selectbox(
+        "📅 데이터 기준 연도 선택",
+        options=[f"{y}년" for y in range(2023, 2041)],
+        index=range(2023, 2041).index(current_year) if current_year in range(2023, 2041) else 0
     )
-st.caption(f"선택된 **{target_month}** 폴더 안에 데이터가 저장됩니다.")
+
+with col2:
+    # 1월부터 12월까지 선택
+    current_month = datetime.now().month
+    target_month = st.selectbox(
+        "📆 데이터 기준 월 선택",
+        options=[f"{i}월" for i in range(1, 13)],
+        index=current_month - 1
+    )
+
+st.info(f"📍 현재 설정: **{target_year} {target_month}** 폴더에 저장됩니다.")
 # ----------------------------
 
-# 1. 먼저 'dfs'라는 큰 가방이 있는지 확인하고 없으면 만듭니다.
+# -----------------------------
+# [수정] 세션 저장소 초기화 (계층형)
+# -----------------------------
 if "dfs" not in st.session_state:
     st.session_state["dfs"] = {}
 
-# 2. 'dfs' 가방 안에 선택한 '월' 폴더가 있는지 확인하고 없으면 만듭니다.
-if target_month not in st.session_state["dfs"]:
-    st.session_state["dfs"][target_month] = {}
+# 연도 폴더 생성
+if target_year not in st.session_state["dfs"]:
+    st.session_state["dfs"][target_year] = {}
+
+# 월 폴더 생성
+if target_month not in st.session_state["dfs"][target_year]:
+    st.session_state["dfs"][target_year][target_month] = {}
 
 if not uploaded_files:
-    st.info("파일을 업로드하면, 다음 페이지에서 DF를 확인/시각화할 수 있어요.")
     st.stop()
-
 errors = []
 
 # -----------------------------
@@ -106,7 +118,7 @@ if st.button("✅ 업로드 파일 로드"):
         for f in uploaded_files:
             try:
                 df = load_file_bytes(f.getvalue(), f.name)
-                st.session_state["dfs"][target_month][f.name] = df
+                st.session_state["dfs"][target_year][target_month][f.name] = df
             except Exception as e:
                 errors.append((f.name, str(e)))
 
@@ -118,30 +130,28 @@ if st.button("✅ 업로드 파일 로드"):
         st.success("모든 파일 로딩 완료! 이제 '테이블 관리' 또는 '시각화' 페이지로 이동하세요.")
 
 # -----------------------------
-# 현재 세션 DF 요약 (에러 방지 수정 버전)
+# [수정] 현재 세션 DF 요약 (3단 계층 반영)
 # -----------------------------
-with st.expander("📦 현재 세션에 저장된 DF 목록", expanded=False):
+with st.expander("📦 전체 저장 데이터 내역 확인", expanded=False):
     all_dfs = st.session_state.get("dfs", {})
     
-    # 1. 아예 데이터가 없거나, 'dfs' 가방이 비어있는지 확인
     if not all_dfs:
-        st.write("아직 저장된 데이터가 없습니다.")
+        st.write("데이터가 없습니다.")
     else:
         summary_data = []
-        # 2. 월(month)별로 순회
-        for month, files in all_dfs.items():
-            # month_files가 딕셔너리인지 확인 (방어적 코드)
-            if isinstance(files, dict):
-                for filename, df in files.items():
-                    summary_data.append({
-                        "데이터 기준 월": month,
-                        "파일명": filename,
-                        "행(Rows)": len(df) if hasattr(df, '__len__') else 0,
-                        "열(Cols)": df.shape[1] if hasattr(df, 'shape') else 0
-                    })
+        # 연도 -> 월 -> 파일 순으로 순회
+        for year, months in all_dfs.items():
+            if isinstance(months, dict):
+                for month, files in months.items():
+                    if isinstance(files, dict):
+                        for filename, df in files.items():
+                            summary_data.append({
+                                "연도": year,
+                                "월": month,
+                                "파일명": filename,
+                                "Rows": len(df) if hasattr(df, '__len__') else 0,
+                                "Cols": df.shape[1] if hasattr(df, 'shape') else 0
+                            })
         
-        # 3. 데이터가 모였다면 표로 표시
         if summary_data:
             st.dataframe(pd.DataFrame(summary_data), use_container_width=True)
-        else:
-            st.write("선택된 월에 업로드된 파일이 없습니다.")
