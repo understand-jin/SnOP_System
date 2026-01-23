@@ -508,7 +508,7 @@ def render_future_risk_simulation(final_df):
                 평균 판매 속도 유지 시 해당 시점에 약 **{target_row['예비위험재고수량']:,.0f}**개의 재고가 소진되지 못하고 남을 것으로 예측됩니다.
             """)
 
-            fig.update_layout(height=400, template="plotly_white", margin=dict(t=20, b=20, l=10, r=10))
+            fig.update_layout(height=300, template="plotly_white", margin=dict(t=20, b=20, l=10, r=10))
             st.plotly_chart(fig, use_container_width=True)
 
 
