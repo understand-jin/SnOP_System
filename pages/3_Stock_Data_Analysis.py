@@ -438,7 +438,7 @@ def render_future_risk_simulation(final_df):
 
     # --- [섹션 3] 자재 및 배치별 심층 분석 시각화 ---
     st.write("#### 📈 배치별 소진 시뮬레이션 상세 확인")
-    
+
     # 1단계: 자재 선택
     risk_summary['mat_label'] = risk_summary[MAT_COL].astype(str) + " | " + risk_summary[MAT_NAME_COL].astype(str)
     selected_mat = st.selectbox("1. 분석할 자재를 선택하세요", options=sorted(risk_summary['mat_label'].unique()))
@@ -448,20 +448,20 @@ def render_future_risk_simulation(final_df):
         mat_only_df = risk_summary[risk_summary['mat_label'] == selected_mat]
         selected_batch = st.selectbox(
             "2. 상세 확인 배치(Batch)를 선택하세요", 
-            options=mat_only_df[BATCH_COL].unique(),
-            help="동일 자재라도 배치별 유효기한이 다르므로 개별 확인이 필요합니다."
+            options=mat_only_df[BATCH_COL].unique()
         )
 
         if selected_batch:
             # 최종 타겟 행 추출
             target_row = mat_only_df[mat_only_df[BATCH_COL] == selected_batch].iloc[0]
-            
-            # 날짜 계산
+        
+            # 날짜 및 시뮬레이션 데이터 준비
             today = datetime.now()
             target_date_180 = today + pd.Timedelta(days=int(target_row[DAYS_COL]) - 180)
             expiry_date = today + pd.Timedelta(days=int(target_row[DAYS_COL]))
+            sales_per_step = target_row['3평판']
 
-            # 정보 박스 시각화
+            # --- [1. 정보 상단 수치 (c1~c4)] ---
             st.write(f"##### 🔍 [{selected_batch}] 배치 분석 정보")
             c1, c2, c3, c4 = st.columns(4)
             with c1: st.write("**현재 재고**"); st.write(f"{target_row[QTY_SRC_COL]:,.0f}")
@@ -469,36 +469,166 @@ def render_future_risk_simulation(final_df):
             with c3: st.write("**위험 도달일 (D-180)**"); st.write(f":red[{target_date_180.strftime('%Y-%m-%d')}]")
             with c4: st.write("**유효기한 만료일**"); st.write(f"{expiry_date.strftime('%Y-%m-%d')}")
 
-            # 시뮬레이션 그래프 데이터 생성 (30일 간격 틱)
-            history_days = []
-            history_qty = []
-            curr_days = target_row[DAYS_COL]
-            curr_qty = target_row[QTY_SRC_COL]
-            sales_per_tick = target_row['3평판']
+            # --- [2. Plotly 그래프 시각화 데이터 생성] ---
+            history_days, history_qty, history_dates = [], [], []
+            curr_days, curr_qty = int(target_row[DAYS_COL]), target_row[QTY_SRC_COL]
 
-            while curr_days > -30 and curr_qty > -sales_per_tick:
+            while curr_days > -60 and curr_qty > -sales_per_step:
                 history_days.append(curr_days)
                 history_qty.append(max(0, curr_qty))
+                history_dates.append(today + pd.Timedelta(days=int(target_row[DAYS_COL]) - curr_days))
                 curr_days -= 30
-                curr_qty -= sales_per_tick
+                curr_qty -= sales_per_step
 
-            # 그래프 시각화
-            fig, ax = plt.subplots(figsize=(10, 4))
-            ax.plot(history_days, history_qty, marker='o', color='#e74c3c', linewidth=2, label='예상 재고 흐름')
-            ax.axvline(x=180, color='blue', linestyle='--', alpha=0.6, label='위험 경계 (D-180)')
-            ax.fill_between(history_days, history_qty, color='#e74c3c', alpha=0.1)
+            # Plotly Area Chart 그리기
+            fig = go.Figure()
+            fig.add_trace(go.Scatter(
+                x=history_dates, y=history_qty,
+                mode='lines+markers+text',
+                name='예상 재고량',
+                line=dict(color='#2c3e50', width=2),
+                fill='tozeroy',
+                fillcolor='rgba(44, 62, 80, 0.1)',
+                text=[f"{q:,.0f}" for q in history_qty],
+                textposition="top center"
+            ))
+        
+            # 위험 구간 배경 강조 (D-180 ~ 만료일)
+            fig.add_vrect(
+                x0=target_date_180, x1=expiry_date,
+                fillcolor="red", opacity=0.1, line_width=0,
+                annotation_text="⚠️ 위험 구간 (D-180)", 
+                annotation_position="top left"
+            )
 
-            ax.set_title(f"자재: {selected_mat} / 배치: {selected_batch}", fontsize=12, pad=15)
-            ax.set_xlabel("남은 유효기한 (Days)")
-            ax.set_ylabel("재고 수량")
-            ax.invert_xaxis()  # 날짜가 줄어드는 흐름 표현
-            ax.legend()
-            ax.yaxis.set_major_formatter(ticker.FuncFormatter(lambda x, p: format(int(x), ',')))
+            # --- [3. st.warning 기반 시뮬레이션 요약] ---
+            # Markdown을 활용해 내부 텍스트 크기를 키웠습니다.
+            st.warning(f"""
+                이 배치는 **{target_date_180.strftime('%Y년 %m월 %d일')}**에 위험 구간(D-180)에 진입합니다.  
+                평균 판매 속도 유지 시 해당 시점에 약 **{target_row['예비위험재고수량']:,.0f}**개의 재고가 소진되지 못하고 남을 것으로 예측됩니다.
+            """)
+
+            fig.update_layout(height=400, template="plotly_white", margin=dict(t=20, b=20, l=10, r=10))
+            st.plotly_chart(fig, use_container_width=True)
+
+
+    # # --- [섹션 3] 자재 및 배치별 심층 분석 시각화 ---
+    # st.write("#### 📈 배치별 소진 시뮬레이션 상세 확인")
+    
+    # # 1단계: 자재 선택
+    # risk_summary['mat_label'] = risk_summary[MAT_COL].astype(str) + " | " + risk_summary[MAT_NAME_COL].astype(str)
+    # selected_mat = st.selectbox("1. 분석할 자재를 선택하세요", options=sorted(risk_summary['mat_label'].unique()))
+
+    # if selected_mat:
+    #     # 2단계: 선택한 자재 내의 배치 선택
+    #     mat_only_df = risk_summary[risk_summary['mat_label'] == selected_mat]
+    #     selected_batch = st.selectbox(
+    #         "2. 상세 확인 배치(Batch)를 선택하세요", 
+    #         options=mat_only_df[BATCH_COL].unique(),
+    #         help="동일 자재라도 배치별 유효기한이 다르므로 개별 확인이 필요합니다."
+    #     )
+
+        # if selected_batch:
+        #     # 최종 타겟 행 추출
+        #     target_row = mat_only_df[mat_only_df[BATCH_COL] == selected_batch].iloc[0]
             
-            st.warning(f"⚠️ **시뮬레이션 요약**: 이 배치는 **{target_date_180.strftime('%Y년 %m월 %d일')}**에 위험 구간(D-180)에 진입합니다. "
-                       f"평균 판매 속도 유지 시 해당 시점에 약 **{target_row['예비위험재고수량']:,.0f}**개의 재고가 소진되지 못하고 남을 것으로 예측됩니다.")
+        #     # 날짜 계산
+        #     today = datetime.now()
+        #     target_date_180 = today + pd.Timedelta(days=int(target_row[DAYS_COL]) - 180)
+        #     expiry_date = today + pd.Timedelta(days=int(target_row[DAYS_COL]))
+
+        #     # 정보 박스 시각화
+        #     st.write(f"##### 🔍 [{selected_batch}] 배치 분석 정보")
+        #     c1, c2, c3, c4 = st.columns(4)
+        #     with c1: st.write("**현재 재고**"); st.write(f"{target_row[QTY_SRC_COL]:,.0f}")
+        #     with c2: st.write("**월평균 판매(3평판)**"); st.write(f"{target_row['3평판']:,.2f}")
+        #     with c3: st.write("**위험 도달일 (D-180)**"); st.write(f":red[{target_date_180.strftime('%Y-%m-%d')}]")
+        #     with c4: st.write("**유효기한 만료일**"); st.write(f"{expiry_date.strftime('%Y-%m-%d')}")
+
+        #     # 시뮬레이션 그래프 데이터 생성 (30일 간격 틱)
+        #     history_days = []
+        #     history_qty = []
+        #     curr_days = target_row[DAYS_COL]
+        #     curr_qty = target_row[QTY_SRC_COL]
+        #     sales_per_tick = target_row['3평판']
+
+        #     while curr_days > -30 and curr_qty > -sales_per_tick:
+        #         history_days.append(curr_days)
+        #         history_qty.append(max(0, curr_qty))
+        #         curr_days -= 30
+        #         curr_qty -= sales_per_tick
+
+        #     # 그래프 시각화
+        #     fig, ax = plt.subplots(figsize=(10, 4))
+        #     ax.plot(history_days, history_qty, marker='o', color='#e74c3c', linewidth=2, label='예상 재고 흐름')
+        #     ax.axvline(x=180, color='blue', linestyle='--', alpha=0.6, label='위험 경계 (D-180)')
+        #     ax.fill_between(history_days, history_qty, color='#e74c3c', alpha=0.1)
+
+        #     ax.set_title(f"자재: {selected_mat} / 배치: {selected_batch}", fontsize=12, pad=15)
+        #     ax.set_xlabel("남은 유효기한 (Days)")
+        #     ax.set_ylabel("재고 수량")
+        #     ax.invert_xaxis()  # 날짜가 줄어드는 흐름 표현
+        #     ax.legend()
+        #     ax.yaxis.set_major_formatter(ticker.FuncFormatter(lambda x, p: format(int(x), ',')))
             
-            st.pyplot(fig)
+        #     st.warning(f"⚠️ **시뮬레이션 요약**: 이 배치는 **{target_date_180.strftime('%Y년 %m월 %d일')}**에 위험 구간(D-180)에 진입합니다. "
+        #                f"평균 판매 속도 유지 시 해당 시점에 약 **{target_row['예비위험재고수량']:,.0f}**개의 재고가 소진되지 못하고 남을 것으로 예측됩니다.")
+            
+        #     st.pyplot(fig)
+
+        # if selected_batch:
+        #     target_row = mat_only_df[mat_only_df[BATCH_COL] == selected_batch].iloc[0]
+        
+        # # 1. 데이터 생성
+        # today = datetime.now()
+        # history_days, history_qty, history_dates = [], [], []
+        # curr_days, curr_qty = int(target_row[DAYS_COL]), target_row[QTY_SRC_COL]
+        # sales_per_step = target_row['3평판']
+
+        # while curr_days > -60 and curr_qty > -sales_per_step:
+        #     history_days.append(curr_days)
+        #     history_qty.append(max(0, curr_qty))
+        #     # 실제 날짜 계산
+        #     history_dates.append(today + pd.Timedelta(days=int(target_row[DAYS_COL]) - curr_days))
+        #     curr_days -= 30
+        #     curr_qty -= sales_per_step
+
+        # # 2. Plotly 고급 시각화
+        # fig = go.Figure()
+
+        # # 재고 소진 영역 (그라데이션 느낌의 Fill)
+        # fig.add_trace(go.Scatter(
+        #     x=history_dates, y=history_qty,
+        #     mode='lines+markers+text',
+        #     name='예상 재고량',
+        #     line=dict(color='#2c3e50', width=4),
+        #     fill='tozeroy',
+        #     fillcolor='rgba(44, 62, 80, 0.1)',
+        #     text=[f"{q:,.0f}" for q in history_qty],
+        #     textposition="top center"
+        # ))
+
+        # # 배경에 위험 구간 표시 (D-180 이후를 붉은 배경으로)
+        # risk_date_180 = today + pd.Timedelta(days=int(target_row[DAYS_COL]) - 180)
+        # expiry_date = today + pd.Timedelta(days=int(target_row[DAYS_COL]))
+
+        # fig.add_vrect(
+        #     x0=risk_date_180, x1=expiry_date,
+        #     fillcolor="red", opacity=0.1, line_width=0,
+        #     annotation_text="⚠️ 유효기한 리스크 구간 (D-180)", 
+        #     annotation_position="top left"
+        # )
+
+        # fig.update_layout(
+        #     title=f"<b>{selected_mat}</b><br><span style='font-size:13px; color:gray;'>배치번호: {selected_batch} | 월 판매 속도: {sales_per_step:,.1f}</span>",
+        #     xaxis_title="날짜 흐름",
+        #     yaxis_title="재고 수량",
+        #     template="plotly_white",
+        #     height=500,
+        #     hovermode="x unified"
+        # )
+
+        # st.plotly_chart(fig, use_container_width=True)
             
             # 최종 코멘트
             # st.warning(f"⚠️ **시뮬레이션 요약**: 이 배치는 **{target_date_180.strftime('%Y년 %m월 %d일')}**에 위험 구간(D-180)에 진입합니다. "
