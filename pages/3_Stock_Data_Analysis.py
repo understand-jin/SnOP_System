@@ -1,6 +1,6 @@
 import streamlit as st
 import pandas as pd
-from datetime import datetime
+from datetime import datetime, timedelta
 import matplotlib.pyplot as plt
 import seaborn as sns
 import matplotlib.font_manager as fm
@@ -8,6 +8,7 @@ import os
 import plotly.express as px
 import matplotlib.ticker as ticker
 import plotly.graph_objects as go
+import math
 
 # ✅ 페이지 설정
 st.set_page_config(page_title="Stock Data Analysis", layout="wide")
@@ -383,259 +384,429 @@ render_country_stock_analysis(final_df, VALUE_COL, BUCKET_COL, selected_year, se
 
 
 # -----------------------------------------------------
-# 💾 재고소진시뮬레이션
+# 💾 재고소진시뮬레이션 (FEFO + D-180 도달 즉시 판매중단)
 # -----------------------------------------------------
+def simulate_batches_by_product(
+    df: pd.DataFrame,
+    product_cols=("자재", "자재 내역"),            # (MAT_COL, MAT_NAME_COL)
+    batch_col="배치",                          # BATCH_COL
+    days_col="유효 기한",                      # DAYS_COL  (남은 일수 컬럼)
+    qty_col="Stock Quantity on Period End",     # QTY_SRC_COL
+    monthly_sales_col="3평판",                  # 월 판매량
+    risk_days=180,                              # D-180
+    step_days=30,                               # 30일 단위
+    today=None
+):
+    """
+    제품별로 배치를 유효기한(남은일수) 짧은 순으로 정렬한 뒤,
+    가장 먼저 만료되는 배치부터 월평균 판매량(3평판) 기준으로 판매(차감) 시뮬레이션.
 
-def render_future_risk_simulation(final_df):
-    st.divider()
-    st.subheader("🔮 향후 유효기한 리스크 시뮬레이션 (판매 속도 반영)")
-    st.info("실제 판매 속도(3평판)를 기반으로 유효기한이 180일(6개월) 남은 시점의 예상 잔고를 산출합니다.")
+    ✅ 변경점(요구사항 반영):
+      - 유효기한이 6개월 미만(D-180 이하)이 되는 시점(risk_entry_date)부터는 판매 불가
+      - 만약 30일 판매 구간 중간에 risk_entry_date가 끼면, risk_entry_date 직전까지만 "부분판매(일할)" 후 즉시 중단하고 다음 배치로 넘어감
 
-    # 1. 데이터 필터링: 12개월 전후이면서 판매 실적(3평판)이 있는 데이터
-    sim_targets = ["12개월 미만", "12개월 이상"]
-    df_sim = final_df[
-        (final_df[BUCKET_COL].isin(sim_targets)) & 
-        (final_df['3평판'] >= 1)
-    ].copy()
+    판매 중단 조건:
+      - 재고가 0이 됨 (sold_out)
+      - 유효기한이 risk_days 이하가 됨 (risk_reached)  ← risk_entry_date 도달 즉시 판매 중단
 
-    if df_sim.empty:
-        st.warning("시뮬레이션 대상 자재(12개월 전후 & 판매실적 존재)가 없습니다.")
-        return
+    반환:
+      - detail_df: 배치별 판매 시작/종료/중단사유/잔량/위험진입일 등 이력
+      - updated_df: 시뮬레이션 후 배치별 잔량(qty_col 업데이트)
+    """
 
-    # 2. 시뮬레이션 로직 함수 (배치별 적용)
-    def run_simulation(row):
-        days_left = row[DAYS_COL]
-        qty_left = row[QTY_SRC_COL]
-        monthly_sales = row['3평판']
-        # 유효기한이 180일 남을 때까지 30일 단위로 판매량 차감
-        while days_left > 180 and qty_left > 0:
-            days_left -= 30
-            qty_left -= monthly_sales
-        return max(0, qty_left)
+    if today is None:
+        today = datetime.now().date()
+    elif isinstance(today, datetime):
+        today = today.date()
 
-    df_sim['예비위험재고수량'] = df_sim.apply(run_simulation, axis=1)
-    df_sim['예비위험금액'] = df_sim['예비위험재고수량'] * df_sim[UNIT_COST_COL]
-    
-    # 예비위험재고가 1개라도 남을 것으로 예측되는 데이터만 추출
-    risk_summary = df_sim[df_sim['예비위험재고수량'] > 0].copy()
-    
-    # --- [섹션 1] 상단 요약 지표 ---
-    m1, m2, m3 = st.columns(3)
-    m1.metric("탐지된 위험 배치 수", f"{len(risk_summary)}개")
-    m2.metric("예상 위험 금액 (합계)", f"₩{risk_summary['예비위험금액'].sum():,.0f}")
-    m3.info("💡 180일(6개월) 시점에 재고가 남는 배치만 리스트업됩니다.")
+    df0 = df.copy()
 
-    # --- [섹션 2] 상세 리스트 ---
-    st.write("#### 📋 예비 위험 탐지 상세 리스트 (배치 단위)")
-    display_cols = [MAT_COL, MAT_NAME_COL, BATCH_COL, DAYS_COL, '3평판', '예비위험재고수량', '예비위험금액']
-    st.dataframe(
-        risk_summary[display_cols].sort_values('예비위험금액', ascending=False), 
-        use_container_width=True,
-        height=300
+    # 숫자형 정리 (NaN 방어)
+    df0[days_col] = pd.to_numeric(df0[days_col], errors="coerce").fillna(0).astype(int)
+    df0[qty_col] = pd.to_numeric(df0[qty_col], errors="coerce").fillna(0.0)
+    df0[monthly_sales_col] = pd.to_numeric(df0[monthly_sales_col], errors="coerce").fillna(0.0)
+
+    detail_rows = []
+    updated = df0.copy()
+
+    grp_cols = list(product_cols)
+
+    for prod_key, g in df0.groupby(grp_cols, dropna=False):
+        g = g.copy()
+
+        # (1) 배치: 유효기한 짧은 순 정렬 (FEFO)
+        g = g.sort_values(days_col, ascending=True)
+
+        # 제품 판매량: 배치마다 동일하다고 가정(대표값 사용)
+        monthly_sales = float(g[monthly_sales_col].iloc[0]) if len(g) else 0.0
+
+        # 이 제품의 시간은 "오늘"부터 시작
+        current_date = today
+
+        # 배치 상태 저장
+        batches = []
+        for _, row in g.iterrows():
+            init_days = int(row[days_col])
+            init_qty = float(row[qty_col])
+            batches.append({
+                "prod_key": prod_key,
+                "batch": row[batch_col],
+                "init_days": init_days,
+                "qty": init_qty
+            })
+
+        # helper: 특정 날짜에서 남은 일수 계산(시간 경과 반영)
+        def remaining_days(init_days, date_):
+            return init_days - (date_ - today).days
+
+        # 배치들을 순서대로 처리
+        for b in batches:
+            batch_id = b["batch"]
+            init_days = b["init_days"]
+            init_qty = b["qty"]
+
+            # 위험진입일(언제 D-180 되는지)
+            if init_days <= risk_days:
+                risk_entry_date = today
+            else:
+                risk_entry_date = today + timedelta(days=(init_days - risk_days))
+
+            # 배치에 도착한 시점(현재시간)에서 남은 일수
+            days_now = remaining_days(init_days, current_date)
+
+            # 기록용 변수
+            sell_start_date = None
+            sell_end_date = None
+            stop_reason = None
+            qty_sold_total = 0.0
+            months_sold = 0
+            sold_days_total = 0  # ✅ 부분판매를 위해 실제 판매일수 누적
+
+            # 판매량 0이면 판매 불가
+            if monthly_sales <= 0:
+                sell_start_date = None
+                sell_end_date = current_date
+                stop_reason = "no_sales"
+                days_left_at_stop = remaining_days(init_days, current_date)
+
+                detail_rows.append({
+                    product_cols[0]: prod_key[0] if isinstance(prod_key, tuple) else prod_key,
+                    product_cols[1]: prod_key[1] if isinstance(prod_key, tuple) and len(prod_key) > 1 else None,
+                    batch_col: batch_id,
+                    "init_qty": init_qty,
+                    "init_days": init_days,
+                    "risk_entry_date": risk_entry_date,
+                    "sell_start_date": sell_start_date,
+                    "sell_end_date": sell_end_date,
+                    "months_sold": months_sold,
+                    "sold_days_total": sold_days_total,
+                    "qty_sold": qty_sold_total,
+                    "remaining_qty": max(0.0, b["qty"]),
+                    "days_left_at_stop": days_left_at_stop,
+                    "stop_reason": stop_reason
+                })
+                continue
+
+            # 이미 위험 구간이면 시작도 못함
+            if days_now <= risk_days:
+                sell_start_date = None
+                sell_end_date = current_date
+                stop_reason = "risk_reached_before_start"
+                days_left_at_stop = days_now
+
+                detail_rows.append({
+                    product_cols[0]: prod_key[0] if isinstance(prod_key, tuple) else prod_key,
+                    product_cols[1]: prod_key[1] if isinstance(prod_key, tuple) and len(prod_key) > 1 else None,
+                    batch_col: batch_id,
+                    "init_qty": init_qty,
+                    "init_days": init_days,
+                    "risk_entry_date": risk_entry_date,
+                    "sell_start_date": sell_start_date,
+                    "sell_end_date": sell_end_date,
+                    "months_sold": months_sold,
+                    "sold_days_total": sold_days_total,
+                    "qty_sold": qty_sold_total,
+                    "remaining_qty": max(0.0, b["qty"]),
+                    "days_left_at_stop": days_left_at_stop,
+                    "stop_reason": stop_reason
+                })
+                continue
+
+            # (2)(3)(4) 판매 시뮬레이션
+            sell_start_date = current_date
+            daily_sales = monthly_sales / step_days if step_days > 0 else 0.0
+
+            while True:
+                days_now = remaining_days(init_days, current_date)
+
+                # ✅ 위험 도달(=D-180 이하) 즉시 판매 중단
+                if days_now <= risk_days:
+                    sell_end_date = current_date
+                    stop_reason = "risk_reached"
+                    break
+
+                # 재고 0이면 종료
+                if b["qty"] <= 0:
+                    sell_end_date = current_date
+                    stop_reason = "sold_out"
+                    break
+
+                next_date = current_date + timedelta(days=step_days)
+                days_until_risk = (risk_entry_date - current_date).days  # 위험진입까지 남은 일수
+
+                # ✅ 이번 30일 구간 중간에 risk_entry_date가 들어오면:
+                # risk_entry_date 직전까지만 "부분판매(일할)" 후 즉시 중단
+                if 0 < days_until_risk < step_days:
+                    sellable_days = days_until_risk
+                    sellable_qty = daily_sales * sellable_days
+
+                    sell_qty = min(b["qty"], sellable_qty)
+                    b["qty"] -= sell_qty
+                    qty_sold_total += sell_qty
+                    sold_days_total += sellable_days
+
+                    # 시간은 위험진입일로 정확히 이동
+                    current_date = risk_entry_date
+
+                    sell_end_date = current_date
+                    stop_reason = "risk_reached"
+                    break
+
+                # ✅ 이번 구간에는 위험진입 없음 => 30일치 정상 판매
+                sell_qty = min(b["qty"], monthly_sales)
+                b["qty"] -= sell_qty
+                qty_sold_total += sell_qty
+                months_sold += 1
+                sold_days_total += step_days
+
+                current_date = next_date
+
+            days_left_at_stop = remaining_days(init_days, sell_end_date)
+
+            detail_rows.append({
+                product_cols[0]: prod_key[0] if isinstance(prod_key, tuple) else prod_key,
+                product_cols[1]: prod_key[1] if isinstance(prod_key, tuple) and len(prod_key) > 1 else None,
+                batch_col: batch_id,
+                "init_qty": init_qty,
+                "init_days": init_days,
+                "risk_entry_date": risk_entry_date,
+                "sell_start_date": sell_start_date,
+                "sell_end_date": sell_end_date,
+                "months_sold": months_sold,
+                "sold_days_total": sold_days_total,
+                "qty_sold": qty_sold_total,
+                "remaining_qty": max(0.0, b["qty"]),
+                "days_left_at_stop": days_left_at_stop,
+                "stop_reason": stop_reason
+            })
+
+        # updated_df에 반영: 제품/배치 기준으로 qty 업데이트
+        for b in batches:
+            updated.loc[
+                (updated[product_cols[0]] == (prod_key[0] if isinstance(prod_key, tuple) else prod_key)) &
+                (updated[batch_col] == b["batch"]),
+                qty_col
+            ] = max(0.0, b["qty"])
+
+    detail_df = pd.DataFrame(detail_rows)
+    return detail_df, updated
+
+
+# =====================================================
+# 아래는 Streamlit에서 그려주는 전체 흐름
+# (final_df, MAT_COL 등은 네 기존 코드에서 만들어진 걸 그대로 사용)
+# =====================================================
+
+# 예시: 네 코드에서 이미 정의돼있을 변수들
+# MAT_COL = "자재"
+# MAT_NAME_COL = "자재 내역"
+# BATCH_COL = "배치"
+# DAYS_COL = "유효 기한"
+# QTY_SRC_COL = "Stock Quantity on Period End"
+
+base_today = datetime.now().date()
+
+# ✅ 시뮬레이션 실행
+detail_df, df_after = simulate_batches_by_product(
+    df=final_df,
+    product_cols=(MAT_COL, MAT_NAME_COL),
+    batch_col=BATCH_COL,
+    days_col=DAYS_COL,
+    qty_col=QTY_SRC_COL,
+    monthly_sales_col="3평판",
+    risk_days=180,
+    step_days=30,
+    today=base_today,
+)
+
+gantt_df = detail_df.copy()
+
+# no_sales 제외
+if "stop_reason" in gantt_df.columns:
+    gantt_df = gantt_df[gantt_df["stop_reason"] != "no_sales"].copy()
+
+# 날짜 컬럼 datetime으로 변환 (Plotly timeline용)
+for c in ["sell_start_date", "sell_end_date", "risk_entry_date"]:
+    if c in gantt_df.columns:
+        gantt_df[c] = pd.to_datetime(gantt_df[c], errors="coerce")
+
+# 판매 시작/끝 없는 행 제외
+gantt_df = gantt_df.dropna(subset=["sell_start_date", "sell_end_date"]).copy()
+
+st.write("### 🗓️ 제품별 배치 판매 간트 차트 (no_sales 제외)")
+
+# -----------------------------
+# 2) 제품 선택 UI
+# -----------------------------
+gantt_df["mat_label"] = gantt_df[MAT_COL].astype(str) + " | " + gantt_df[MAT_NAME_COL].astype(str)
+
+prod_list = sorted(gantt_df["mat_label"].unique())
+selected_prod = st.selectbox("제품 선택", options=["(전체)"] + prod_list)
+
+view_df = gantt_df if selected_prod == "(전체)" else gantt_df[gantt_df["mat_label"] == selected_prod].copy()
+
+# -----------------------------
+# 3) 간트 차트 (판매기간 + 부진재고 구간)
+# -----------------------------
+if view_df.empty:
+    st.info("표시할 데이터가 없습니다. (no_sales 제외 후 남은 배치가 없거나, sell_start/end가 비어있을 수 있어요.)")
+else:
+    # ✅ 만료일(expiry_date) 계산
+    view_df["expiry_date"] = pd.to_datetime(base_today) + pd.to_timedelta(view_df["init_days"], unit="D")
+
+    # ✅ 판매 구간
+    sales_bar = view_df.copy()
+    sales_bar["phase"] = "판매기간"
+    sales_bar = sales_bar.rename(columns={"sell_start_date": "x_start", "sell_end_date": "x_end"})
+
+    # ✅ 부진재고(잔존재고) 구간: remaining_qty > 0 인 배치만
+    sluggish_bar = view_df.copy()
+    sluggish_bar = sluggish_bar[sluggish_bar["remaining_qty"].fillna(0) > 0].copy()
+    sluggish_bar = sluggish_bar.dropna(subset=["risk_entry_date", "expiry_date"]).copy()
+    sluggish_bar["phase"] = "부진재고 구간"
+    sluggish_bar = sluggish_bar.rename(columns={"risk_entry_date": "x_start", "expiry_date": "x_end"})
+
+    # 합치기
+    plot_df = pd.concat([sales_bar, sluggish_bar], ignore_index=True)
+
+    # 배치 정렬 (유효기한 짧은 순 위로)
+    plot_df = plot_df.sort_values(["mat_label", "init_days"], ascending=[True, True])
+
+    # ✅ 색상 고정: 부진재고는 빨강
+    color_map = {
+        "판매기간": "#4C78A8",
+        "부진재고 구간": "#E45756"
+    }
+
+    fig = px.timeline(
+        plot_df,
+        x_start="x_start",
+        x_end="x_end",
+        y=BATCH_COL,
+        color="phase",
+        color_discrete_map=color_map,
+        hover_data={
+            MAT_COL: True,
+            MAT_NAME_COL: True,
+            "stop_reason": True if "stop_reason" in plot_df.columns else False,
+            "init_days": True if "init_days" in plot_df.columns else False,
+            "init_qty": True if "init_qty" in plot_df.columns else False,
+            "qty_sold": True if "qty_sold" in plot_df.columns else False,
+            "remaining_qty": True if "remaining_qty" in plot_df.columns else False,
+            "sold_days_total": True if "sold_days_total" in plot_df.columns else False,
+            "risk_entry_date": True if "risk_entry_date" in plot_df.columns else False,
+            "expiry_date": True if "expiry_date" in plot_df.columns else False,
+        },
     )
 
-    st.write("---")
+    fig.update_yaxes(autorange="reversed")
+    fig.update_layout(
+        height=550 if selected_prod == "(전체)" else 420,
+        margin=dict(t=30, b=10, l=10, r=10),
+        xaxis_title="기간",
+        yaxis_title="배치",
+        xaxis_title_font=dict(size=18, family="Arial Black"),
+        yaxis_title_font=dict(size=18, family="Arial Black"),
+        legend_title_text=""
+    )
 
-    # --- [섹션 3] 자재 및 배치별 심층 분석 시각화 ---
-    st.write("#### 📈 배치별 소진 시뮬레이션 상세 확인")
+    fig.update_xaxes(
+    tickfont=dict(size=14, family="Arial Black")
+    )
 
-    # 1단계: 자재 선택
-    risk_summary['mat_label'] = risk_summary[MAT_COL].astype(str) + " | " + risk_summary[MAT_NAME_COL].astype(str)
-    selected_mat = st.selectbox("1. 분석할 자재를 선택하세요", options=sorted(risk_summary['mat_label'].unique()))
+    fig.update_yaxes(
+        tickfont=dict(size=14, family="Arial Black")
+    )
+    st.plotly_chart(fig, use_container_width=True)
 
-    if selected_mat:
-        # 2단계: 선택한 자재 내의 배치 선택
-        mat_only_df = risk_summary[risk_summary['mat_label'] == selected_mat]
-        selected_batch = st.selectbox(
-            "2. 상세 확인 배치(Batch)를 선택하세요", 
-            options=mat_only_df[BATCH_COL].unique()
-        )
+# -----------------------------
+# 4) ✅ 간트 아래 요약 문장 출력 (제품 선택 시 배치별)
+# -----------------------------
+if selected_prod != "(전체)" and (not view_df.empty):
+    st.write("### 🧾 부진재고 요약 (배치별)")
 
-        if selected_batch:
-            # 최종 타겟 행 추출
-            target_row = mat_only_df[mat_only_df[BATCH_COL] == selected_batch].iloc[0]
-        
-            # 날짜 및 시뮬레이션 데이터 준비
-            today = datetime.now()
-            target_date_180 = today + pd.Timedelta(days=int(target_row[DAYS_COL]) - 180)
-            expiry_date = today + pd.Timedelta(days=int(target_row[DAYS_COL]))
-            sales_per_step = target_row['3평판']
+    summary_df = view_df[view_df["remaining_qty"].fillna(0) > 0].copy()
+    summary_df = summary_df.sort_values(["risk_entry_date", "init_days"], ascending=[True, True])
 
-            # --- [1. 정보 상단 수치 (c1~c4)] ---
-            st.write(f"##### 🔍 [{selected_batch}] 배치 분석 정보")
-            c1, c2, c3, c4 = st.columns(4)
-            with c1: st.write("**현재 재고**"); st.write(f"{target_row[QTY_SRC_COL]:,.0f}")
-            with c2: st.write("**월평균 판매(3평판)**"); st.write(f"{target_row['3평판']:,.2f}")
-            with c3: st.write("**위험 도달일 (D-180)**"); st.write(f":red[{target_date_180.strftime('%Y-%m-%d')}]")
-            with c4: st.write("**유효기한 만료일**"); st.write(f"{expiry_date.strftime('%Y-%m-%d')}")
+    if summary_df.empty:
+        st.success("이 제품은 시뮬레이션 기준으로 D-180 시점에 부진재고로 남는 배치가 없습니다.")
+    else:
+        c1, c2, c3 = st.columns(3)
+        with c1:
+            st.metric("부진재고 배치 수", f"{len(summary_df)}개")
+        with c2:
+            st.metric("부진재고 수량 합계", f"{summary_df['remaining_qty'].sum():,.0f}개")
+        with c3:
+            first_date = summary_df["risk_entry_date"].min()
+            st.metric("가장 빠른 부진재고 진입일", first_date.strftime("%Y-%m-%d") if pd.notna(first_date) else "-")
 
-            # --- [2. Plotly 그래프 시각화 데이터 생성] ---
-            history_days, history_qty, history_dates = [], [], []
-            curr_days, curr_qty = int(target_row[DAYS_COL]), target_row[QTY_SRC_COL]
+        st.write("#### 📌 배치별 문장 요약")
+        lines = []
+        for _, r in summary_df.iterrows():
+            b = r[BATCH_COL]
+            dt = r["risk_entry_date"]
+            qty = r["remaining_qty"]
 
-            while curr_days > -60 and curr_qty > -sales_per_step:
-                history_days.append(curr_days)
-                history_qty.append(max(0, curr_qty))
-                history_dates.append(today + pd.Timedelta(days=int(target_row[DAYS_COL]) - curr_days))
-                curr_days -= 30
-                curr_qty -= sales_per_step
+            dt_str = dt.strftime("%Y-%m-%d") if pd.notna(dt) else "-"
+            qty_str = f"{qty:,.0f}"
 
-            # Plotly Area Chart 그리기
-            fig = go.Figure()
-            fig.add_trace(go.Scatter(
-                x=history_dates, y=history_qty,
-                mode='lines+markers+text',
-                name='예상 재고량',
-                line=dict(color='#2c3e50', width=2),
-                fill='tozeroy',
-                fillcolor='rgba(44, 62, 80, 0.1)',
-                text=[f"{q:,.0f}" for q in history_qty],
-                textposition="top center"
-            ))
-        
-            # 위험 구간 배경 강조 (D-180 ~ 만료일)
-            fig.add_vrect(
-                x0=target_date_180, x1=expiry_date,
-                fillcolor="red", opacity=0.1, line_width=0,
-                annotation_text="⚠️ 위험 구간 (D-180)", 
-                annotation_position="top left"
-            )
+            # (원하면 sold_days_total도 같이 보여줄 수 있음)
+            if "sold_days_total" in r and pd.notna(r["sold_days_total"]):
+                sd = int(r["sold_days_total"])
+                lines.append(
+                    f"- 배치 **{b}**는 **{dt_str}**부터 부진재고(D-180) 구간에 진입하며, "
+                    f"예상 잔량은 **{qty_str}개**입니다. (위험진입 전 판매일수: **{sd}일**)"
+                )
+            else:
+                lines.append(
+                    f"- 배치 **{b}**는 **{dt_str}**부터 부진재고(D-180) 구간에 진입하며, "
+                    f"예상 잔량은 **{qty_str}개**입니다."
+                )
 
-            # --- [3. st.warning 기반 시뮬레이션 요약] ---
-            # Markdown을 활용해 내부 텍스트 크기를 키웠습니다.
-            st.warning(f"""
-                이 배치는 **{target_date_180.strftime('%Y년 %m월 %d일')}**에 위험 구간(D-180)에 진입합니다.  
-                평균 판매 속도 유지 시 해당 시점에 약 **{target_row['예비위험재고수량']:,.0f}**개의 재고가 소진되지 못하고 남을 것으로 예측됩니다.
-            """)
+        st.markdown("\n".join(lines))
 
-            fig.update_layout(height=300, template="plotly_white", margin=dict(t=20, b=20, l=10, r=10))
-            st.plotly_chart(fig, use_container_width=True)
+        with st.expander("📋 부진재고 배치 리스트 보기"):
+            show_cols = [
+                BATCH_COL, "risk_entry_date", "expiry_date",
+                "init_days", "init_qty", "qty_sold", "remaining_qty",
+                "sold_days_total", "stop_reason"
+            ]
+            show_cols = [c for c in show_cols if c in summary_df.columns]
+            st.dataframe(summary_df[show_cols], use_container_width=True, height=260)
 
+# -----------------------------
+# 5) (선택) 데이터 일부 표로 보기
+# -----------------------------
+with st.expander("📋 간트 데이터(일부) 보기"):
+    show_cols = [
+        MAT_COL, MAT_NAME_COL, BATCH_COL,
+        "sell_start_date", "sell_end_date", "stop_reason",
+        "init_days", "init_qty", "qty_sold", "remaining_qty",
+        "sold_days_total", "days_left_at_stop", "risk_entry_date"
+    ]
+    show_cols = [c for c in show_cols if c in gantt_df.columns]
+    st.dataframe(view_df[show_cols].head(200), use_container_width=True)
 
-    # # --- [섹션 3] 자재 및 배치별 심층 분석 시각화 ---
-    # st.write("#### 📈 배치별 소진 시뮬레이션 상세 확인")
-    
-    # # 1단계: 자재 선택
-    # risk_summary['mat_label'] = risk_summary[MAT_COL].astype(str) + " | " + risk_summary[MAT_NAME_COL].astype(str)
-    # selected_mat = st.selectbox("1. 분석할 자재를 선택하세요", options=sorted(risk_summary['mat_label'].unique()))
-
-    # if selected_mat:
-    #     # 2단계: 선택한 자재 내의 배치 선택
-    #     mat_only_df = risk_summary[risk_summary['mat_label'] == selected_mat]
-    #     selected_batch = st.selectbox(
-    #         "2. 상세 확인 배치(Batch)를 선택하세요", 
-    #         options=mat_only_df[BATCH_COL].unique(),
-    #         help="동일 자재라도 배치별 유효기한이 다르므로 개별 확인이 필요합니다."
-    #     )
-
-        # if selected_batch:
-        #     # 최종 타겟 행 추출
-        #     target_row = mat_only_df[mat_only_df[BATCH_COL] == selected_batch].iloc[0]
-            
-        #     # 날짜 계산
-        #     today = datetime.now()
-        #     target_date_180 = today + pd.Timedelta(days=int(target_row[DAYS_COL]) - 180)
-        #     expiry_date = today + pd.Timedelta(days=int(target_row[DAYS_COL]))
-
-        #     # 정보 박스 시각화
-        #     st.write(f"##### 🔍 [{selected_batch}] 배치 분석 정보")
-        #     c1, c2, c3, c4 = st.columns(4)
-        #     with c1: st.write("**현재 재고**"); st.write(f"{target_row[QTY_SRC_COL]:,.0f}")
-        #     with c2: st.write("**월평균 판매(3평판)**"); st.write(f"{target_row['3평판']:,.2f}")
-        #     with c3: st.write("**위험 도달일 (D-180)**"); st.write(f":red[{target_date_180.strftime('%Y-%m-%d')}]")
-        #     with c4: st.write("**유효기한 만료일**"); st.write(f"{expiry_date.strftime('%Y-%m-%d')}")
-
-        #     # 시뮬레이션 그래프 데이터 생성 (30일 간격 틱)
-        #     history_days = []
-        #     history_qty = []
-        #     curr_days = target_row[DAYS_COL]
-        #     curr_qty = target_row[QTY_SRC_COL]
-        #     sales_per_tick = target_row['3평판']
-
-        #     while curr_days > -30 and curr_qty > -sales_per_tick:
-        #         history_days.append(curr_days)
-        #         history_qty.append(max(0, curr_qty))
-        #         curr_days -= 30
-        #         curr_qty -= sales_per_tick
-
-        #     # 그래프 시각화
-        #     fig, ax = plt.subplots(figsize=(10, 4))
-        #     ax.plot(history_days, history_qty, marker='o', color='#e74c3c', linewidth=2, label='예상 재고 흐름')
-        #     ax.axvline(x=180, color='blue', linestyle='--', alpha=0.6, label='위험 경계 (D-180)')
-        #     ax.fill_between(history_days, history_qty, color='#e74c3c', alpha=0.1)
-
-        #     ax.set_title(f"자재: {selected_mat} / 배치: {selected_batch}", fontsize=12, pad=15)
-        #     ax.set_xlabel("남은 유효기한 (Days)")
-        #     ax.set_ylabel("재고 수량")
-        #     ax.invert_xaxis()  # 날짜가 줄어드는 흐름 표현
-        #     ax.legend()
-        #     ax.yaxis.set_major_formatter(ticker.FuncFormatter(lambda x, p: format(int(x), ',')))
-            
-        #     st.warning(f"⚠️ **시뮬레이션 요약**: 이 배치는 **{target_date_180.strftime('%Y년 %m월 %d일')}**에 위험 구간(D-180)에 진입합니다. "
-        #                f"평균 판매 속도 유지 시 해당 시점에 약 **{target_row['예비위험재고수량']:,.0f}**개의 재고가 소진되지 못하고 남을 것으로 예측됩니다.")
-            
-        #     st.pyplot(fig)
-
-        # if selected_batch:
-        #     target_row = mat_only_df[mat_only_df[BATCH_COL] == selected_batch].iloc[0]
-        
-        # # 1. 데이터 생성
-        # today = datetime.now()
-        # history_days, history_qty, history_dates = [], [], []
-        # curr_days, curr_qty = int(target_row[DAYS_COL]), target_row[QTY_SRC_COL]
-        # sales_per_step = target_row['3평판']
-
-        # while curr_days > -60 and curr_qty > -sales_per_step:
-        #     history_days.append(curr_days)
-        #     history_qty.append(max(0, curr_qty))
-        #     # 실제 날짜 계산
-        #     history_dates.append(today + pd.Timedelta(days=int(target_row[DAYS_COL]) - curr_days))
-        #     curr_days -= 30
-        #     curr_qty -= sales_per_step
-
-        # # 2. Plotly 고급 시각화
-        # fig = go.Figure()
-
-        # # 재고 소진 영역 (그라데이션 느낌의 Fill)
-        # fig.add_trace(go.Scatter(
-        #     x=history_dates, y=history_qty,
-        #     mode='lines+markers+text',
-        #     name='예상 재고량',
-        #     line=dict(color='#2c3e50', width=4),
-        #     fill='tozeroy',
-        #     fillcolor='rgba(44, 62, 80, 0.1)',
-        #     text=[f"{q:,.0f}" for q in history_qty],
-        #     textposition="top center"
-        # ))
-
-        # # 배경에 위험 구간 표시 (D-180 이후를 붉은 배경으로)
-        # risk_date_180 = today + pd.Timedelta(days=int(target_row[DAYS_COL]) - 180)
-        # expiry_date = today + pd.Timedelta(days=int(target_row[DAYS_COL]))
-
-        # fig.add_vrect(
-        #     x0=risk_date_180, x1=expiry_date,
-        #     fillcolor="red", opacity=0.1, line_width=0,
-        #     annotation_text="⚠️ 유효기한 리스크 구간 (D-180)", 
-        #     annotation_position="top left"
-        # )
-
-        # fig.update_layout(
-        #     title=f"<b>{selected_mat}</b><br><span style='font-size:13px; color:gray;'>배치번호: {selected_batch} | 월 판매 속도: {sales_per_step:,.1f}</span>",
-        #     xaxis_title="날짜 흐름",
-        #     yaxis_title="재고 수량",
-        #     template="plotly_white",
-        #     height=500,
-        #     hovermode="x unified"
-        # )
-
-        # st.plotly_chart(fig, use_container_width=True)
-            
-            # 최종 코멘트
-            # st.warning(f"⚠️ **시뮬레이션 요약**: 이 배치는 **{target_date_180.strftime('%Y년 %m월 %d일')}**에 위험 구간(D-180)에 진입합니다. "
-            #            f"평균 판매 속도 유지 시 해당 시점에 약 **{target_row['예비위험재고수량']:,.0f}**개의 재고가 소진되지 못하고 남을 것으로 예측됩니다.")
-
-
-render_future_risk_simulation(final_df)
 
 # -----------------------------------------------------
 # 💾 가공된 데이터 최종 등록 (계층: 연도 -> 월 -> 분석타입)
