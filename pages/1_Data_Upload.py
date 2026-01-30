@@ -8,6 +8,7 @@ from utils import (
     extract_table_any_excel,
     load_csv_any_encoding,
     parse_html_tables,
+    read_excel_with_smart_header
 )
 
 st.set_page_config(page_title="S&OP System - Data Upload", layout="wide")
@@ -78,35 +79,58 @@ errors = []
 # 핵심 로딩 함수
 # -----------------------------
 @st.cache_data(show_spinner=False)
-def load_file_bytes(file_bytes: bytes, filename: str) -> pd.DataFrame:
+def load_file_bytes(file_bytes: bytes, filename: str):
+    """
+    반환 형태:
+    - 단일 시트 → {"파일명": DataFrame}
+    - 다중 시트 → {"파일명_시트명": DataFrame, ...}
+    """
     lower = filename.lower()
+    result = {}
 
-    # CSV
+    # =========================
+    # CSV (기존 유지)
+    # =========================
     if lower.endswith(".csv"):
         df = load_csv_any_encoding(file_bytes)
-        return preprocess_df(df)
+        df = preprocess_df(df)
+        result[filename] = df
+        return result
 
-    # XLSX
-    if lower.endswith(".xlsx"):
-        df = extract_table_any_excel(
-            file_bytes,
-            filename
-        )
-        return preprocess_df(df)
-
-    # XLS (정상 + MIME/HTML fallback)
-    if lower.endswith(".xls"):
+    # =========================
+    # Excel (xlsx / xls) ✅ 여기 변경
+    # =========================
+    if lower.endswith((".xlsx", ".xls")):
         try:
-            df = extract_table_any_excel(
-                file_bytes,
-                filename
-            )
-            return preprocess_df(df)
-        except Exception:
+            xls = pd.ExcelFile(io.BytesIO(file_bytes))
+
+            for sheet_name in xls.sheet_names:
+                # 🔥 핵심 변경 포인트
+                df = read_excel_with_smart_header(
+                    file_bytes,
+                    sheet_name=sheet_name,
+                    scan_rows=80,   # 필요 시 늘려도 됨
+                )
+                df = preprocess_df(df)
+
+                # 파일명_시트명.xlsx 형태
+                base = filename.replace(".xlsx", "").replace(".xls", "")
+                new_name = f"{base}_{sheet_name}.xlsx"
+                result[new_name] = df
+
+            return result
+
+        except Exception as e:
+            # =========================
+            # xls + html fallback (기존 유지)
+            # =========================
             df = parse_html_tables(file_bytes)
-            return preprocess_df(df)
+            df = preprocess_df(df)
+            result[filename] = df
+            return result
 
     raise ValueError(f"지원하지 않는 파일 형식: {filename}")
+
 
 # -----------------------------
 # 로드 실행 버튼
@@ -117,8 +141,12 @@ if st.button("✅ 업로드 파일 로드"):
     with st.spinner("파일 로딩 중..."):
         for f in uploaded_files:
             try:
-                df = load_file_bytes(f.getvalue(), f.name)
-                st.session_state["dfs"][target_year][target_month][f.name] = df
+                loaded = load_file_bytes(f.getvalue(), f.name)
+
+                # 🔥 시트별 dict 풀어서 저장
+                for new_filename, df in loaded.items():
+                    st.session_state["dfs"][target_year][target_month][new_filename] = df
+
             except Exception as e:
                 errors.append((f.name, str(e)))
 
