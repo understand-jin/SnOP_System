@@ -4,6 +4,8 @@ from wsgiref import headers
 import numpy as np
 import pandas as pd
 from bs4 import BeautifulSoup
+import os
+from pathlib import Path
 
 # -----------------------------
 # 공통 전처리(값/컬럼명 정리)
@@ -367,3 +369,20 @@ def read_excel_with_smart_header(file_bytes: bytes, sheet_name=None, scan_rows: 
     df = df.loc[:, ~df.columns.str.contains("^Unnamed", na=False)]
 
     return df
+
+
+BASE_DATA_DIR = Path("Datas")   # 로컬에 Datas 폴더 기준
+
+def get_stock_csv_path(year: str, month: str) -> Path:
+    # month가 "1월" 이런 형태면 폴더명 그대로 쓰고, 숫자만 쓰고 싶으면 여기서 가공 가능
+    return BASE_DATA_DIR / str(year) / str(month) / "Stock.csv"
+
+def save_stock_csv(df: pd.DataFrame, year: str, month: str) -> Path:
+    p = get_stock_csv_path(year, month)
+    p.parent.mkdir(parents=True, exist_ok=True)  # ✅ 연도/월 폴더 자동 생성
+    df.to_csv(p, index=False, encoding="utf-8-sig")
+    return p
+
+def load_stock_csv(year: str, month: str) -> pd.DataFrame:
+    p = get_stock_csv_path(year, month)
+    return pd.read_csv(p, encoding="utf-8-sig")
