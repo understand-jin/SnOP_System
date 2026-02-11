@@ -284,7 +284,7 @@ def parse_html_tables(file_bytes: bytes) -> pd.DataFrame:
 # -----------------------------
 # 컬럼 작동 인식
 # -----------------------------
-def read_excel_with_smart_header(file_bytes: bytes, sheet_name=None, scan_rows: int = 60) -> pd.DataFrame:
+def read_excel_with_smart_header(file_bytes: bytes, sheet_name=0, scan_rows: int = 60) -> pd.DataFrame:
     """
     엑셀의 헤더 행(컬럼 행)을 범용적으로 자동 탐지하여 DataFrame 생성
     - 키워드 기반 + 통계 기반(숫자비율/빈칸/중복/텍스트비율) 혼합
@@ -386,3 +386,18 @@ def save_stock_csv(df: pd.DataFrame, year: str, month: str) -> Path:
 def load_stock_csv(year: str, month: str) -> pd.DataFrame:
     p = get_stock_csv_path(year, month)
     return pd.read_csv(p, encoding="utf-8-sig")
+
+def get_stockout_csv_path(year: str, month: str) -> Path:
+    return BASE_DATA_DIR / str(year) / str(month) / "Stockout.csv"
+
+def save_stockout_csv(df: pd.DataFrame, year: str, month: str) -> Path:
+    p = get_stockout_csv_path(year, month)
+    p.parent.mkdir(parents=True, exist_ok=True)
+    df.to_csv(p, index=False, encoding="utf-8-sig")
+    return p
+
+def load_stockout_csv(year: str, month: str) -> pd.DataFrame:
+    p = get_stockout_csv_path(year, month)
+    if p.exists():
+        return pd.read_csv(p, encoding="utf-8-sig")
+    return None

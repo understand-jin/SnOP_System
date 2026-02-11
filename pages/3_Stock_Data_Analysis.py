@@ -16,7 +16,90 @@ from utils import get_stock_csv_path, save_stock_csv, load_stock_csv
 
 # ✅ 페이지 설정
 st.set_page_config(page_title="Stock Data Analysis", layout="wide")
-st.title("📈 Stock Data Analysis")
+
+# --- [추가] 커스텀 CSS (프리미엄 UI 스타일링) ---
+st.markdown("""
+<style>
+    /* 전체 배경 및 폰트 설정 */
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+    
+    .main {
+        background-color: #f8f9fa;
+    }
+    
+    /* 카드형 컨테이너 스타일 */
+    .stContainer {
+        background-color: #ffffff;
+        padding: 2rem;
+        border-radius: 12px;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+        margin-bottom: 1.5rem;
+        border: 1px solid #e9ecef;
+    }
+    
+    /* 제목 스타일 */
+    .main-title {
+        font-family: 'Inter', sans-serif;
+        color: #1e293b;
+        font-weight: 700;
+        font-size: 2.5rem;
+        margin-bottom: 0.5rem;
+    }
+    
+    .sub-title {
+        color: #64748b;
+        font-size: 1.1rem;
+        margin-bottom: 2rem;
+    }
+    
+    /* 메트릭 박스 스타일 */
+    [data-testid="stMetric"] {
+        border: 1px solid #e9ecef;
+        padding: 15px 20px;
+        border-radius: 12px;
+        background-color: #ffffff;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.02);
+    }
+
+    [data-testid="stMetricValue"] {
+        font-size: 1.8rem;
+        font-weight: 700;
+        color: #0f172a;
+    }
+    
+    [data-testid="stMetricLabel"] {
+        font-size: 0.9rem;
+        color: #64748b;
+        font-weight: 600;
+    }
+
+    /* 탭 스타일 개선 */
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 8px;
+        background-color: transparent;
+    }
+
+    .stTabs [data-baseweb="tab"] {
+        height: 45px;
+        white-space: pre-wrap;
+        background-color: #f1f5f9;
+        border-radius: 8px 8px 0px 0px;
+        color: #475569;
+        font-weight: 600;
+        padding: 10px 20px;
+    }
+
+    .stTabs [aria-selected="true"] {
+        background-color: #ffffff !important;
+        color: #2563eb !important;
+        border-bottom: 2px solid #2563eb !important;
+    }
+</style>
+""", unsafe_allow_html=True)
+
+with st.container():
+    st.markdown('<h1 class="main-title">📈 Stock Data Analysis</h1>', unsafe_allow_html=True)
+    st.markdown('<p class="sub-title">재고 현황 및 유효기한 리스크 심층 분석 대시보드</p>', unsafe_allow_html=True)
 
 # ✅ 상수 설정 (기본 유지)
 PRICE_DF_KEY = "1. 결산 재고수불부(원가).xls"
@@ -160,8 +243,12 @@ def build_final_df(dfs_dict, year_str, month_str):
         merged.drop(columns=['자재코드'], inplace=True)
     merged['3평판'] = merged['3평판'].fillna(0)
     
-    # (선택사항) '재고 보유 월수(MOI)' 지표 추가 가능
-    # merged['재고월수'] = merged.apply(lambda r: r[QTY_SRC_COL] / r['3평판'] if r['3평판'] > 0 else 999, axis=1)
+    # ✅ "재고일수" 컬럼 추가: Stock Quantity / (3평판 / 30)
+    # 3평판이 0인 경우 매우 큰 값(999)으로 채움
+    merged['재고일수'] = merged.apply(
+        lambda r: r[QTY_SRC_COL] / (r['3평판'] / 30.0) if r['3평판'] > 0 else 999.0, 
+        axis=1
+    )
     
     return merged
 
@@ -226,10 +313,29 @@ else:
 # -----------------------------------------------------
 # 1️⃣ 기간별 위험 자재 요약 (ON)
 # -----------------------------------------------------
-st.subheader(f"🚨 {selected_year} {selected_month} 기간별 위험 자재 요약")
-tab6, tab7, tab9, tab12 = st.tabs(
-    ["⚠️ 6개월 미만", "🔔 7개월 미만", "ℹ️ 9개월 미만", "📅 12개월 미만"]
-)
+with st.container():
+    st.markdown("### 📊 한눈에 보는 재고 리스크")
+    
+    # 상단 요약 지표 (KPI)
+    total_value = final_df[VALUE_COL].sum()
+    total_count = final_df[MAT_COL].nunique()
+    
+    # 위험 구간(9개월 미만) 필터
+    risk_buckets_9m = ["폐기확정(유효기한 지남)", "1개월 미만", "2개월 미만", "3개월 미만", "4개월 미만", "5개월 미만", "6개월 미만", "7개월 미만", "8개월 미만", "9개월 미만"]
+    risk_df_9m = final_df[final_df[BUCKET_COL].isin(risk_buckets_9m)]
+    risk_value_9m = risk_df_9m[VALUE_COL].sum()
+    risk_percent_9m = (risk_value_9m / total_value * 100) if total_value > 0 else 0
+    
+    m1, m2, m3 = st.columns(3)
+    m1.metric("총 재고 가치", f"₩{total_value:,.0f}")
+    m2.metric("9개월 미만 재고 금액", f"₩{risk_value_9m:,.0f}")
+    m3.metric("분석 대상 자재 수", f"{total_count:,}종")
+
+    st.markdown("---")
+    st.markdown(f"#### 🚨 {selected_year} {selected_month} 기간별 상세 요약")
+    tab6, tab7, tab9, tab12 = st.tabs(
+        ["⚠️ 6개월 미만", "🔔 7개월 미만", "ℹ️ 9개월 미만", "📅 12개월 미만"]
+    )
 
 # def display_risk_summary(target_buckets, tab_obj, title):
 #     with tab_obj:
@@ -379,7 +485,6 @@ display_risk_summary(risk_base + ["6개월 미만"], tab6, "6개월 미만")
 display_risk_summary(["7개월 미만"], tab7, "7개월 미만")
 display_risk_summary(["8개월 미만", "9개월 미만"], tab9, "9개월 미만")
 display_risk_summary(["10개월 미만", "11개월 미만", "12개월 미만"], tab12,"12개월 미만")
-st.divider()
 
 
 # -----------------------------------------------------
@@ -390,69 +495,70 @@ def render_batch_analysis_section(final_df, MAT_COL, MAT_NAME_COL, BATCH_COL, BU
     자재-배치별 상세 분석 섹션을 렌더링하는 함수입니다.
     기존 로직을 그대로 유지하며 매개변수로 필요한 상수들을 받습니다.
     """
-    st.subheader("🔍 자재-배치별 상세 분석 (6/7/9개월 집중)")
+    with st.container():
+        st.subheader("🔍 자재-배치별 상세 분석 (6/7/9개월 집중)")
 
-    target_risks_all = ["3개월 미만", "6개월 미만", "7개월 미만", "9개월 미만", "폐기확정(유효기한 지남)"]
-    df_risk_all = final_df[final_df[BUCKET_COL].isin(target_risks_all)].copy()
+        target_risks_all = ["3개월 미만", "6개월 미만", "7개월 미만", "9개월 미만", "폐기확정(유효기한 지남)"]
+        df_risk_all = final_df[final_df[BUCKET_COL].isin(target_risks_all)].copy()
 
-    if not df_risk_all.empty:
-        top_mats = (
-            df_risk_all.groupby([MAT_COL, MAT_NAME_COL], as_index=False)[VALUE_COL].sum()
-            .sort_values(VALUE_COL, ascending=False)
-        )
-        top_mats["label"] = top_mats[MAT_COL].astype(str) + " | " + top_mats[MAT_NAME_COL].astype(str)
-        
-        col_sel, col_chk = st.columns([2, 1])
-        with col_sel:
-            selected_label = st.selectbox("상세 조사가 필요한 자재를 선택하세요", options=top_mats["label"].tolist())
-            selected_mat = selected_label.split(" | ")[0]
-        with col_chk:
-            show_all_batches = st.checkbox("모든 위험 배치 보기 (금액순)", value=False)
+        if not df_risk_all.empty:
+            top_mats = (
+                df_risk_all.groupby([MAT_COL, MAT_NAME_COL], as_index=False)[VALUE_COL].sum()
+                .sort_values(VALUE_COL, ascending=False)
+            )
+            top_mats["label"] = top_mats[MAT_COL].astype(str) + " | " + top_mats[MAT_NAME_COL].astype(str)
+            
+            col_sel, col_chk = st.columns([2, 1])
+            with col_sel:
+                selected_label = st.selectbox("상세 조사가 필요한 자재를 선택하세요", options=top_mats["label"].tolist())
+                selected_mat = selected_label.split(" | ")[0]
+            with col_chk:
+                show_all_batches = st.checkbox("모든 위험 배치 보기 (금액순)", value=False)
 
-        if show_all_batches:
-            view_df = df_risk_all.sort_values(VALUE_COL, ascending=False).reset_index(drop=True)
-        else:
-            view_df = df_risk_all[df_risk_all[MAT_COL].astype(str) == selected_mat].sort_values(VALUE_COL, ascending=False).reset_index(drop=True)
-
-        st.write(f"### 📍 상세 리스트 (분석 대상: {selected_label if not show_all_batches else '전체 위험 배치'})")
-        
-        v_disp = view_df[[MAT_COL, MAT_NAME_COL, BATCH_COL, BUCKET_COL, QTY_SRC_COL, VALUE_COL]].copy()
-        v_disp[VALUE_COL] = v_disp[VALUE_COL].map('{:,.0f}'.format)
-        v_disp[QTY_SRC_COL] = v_disp[QTY_SRC_COL].map('{:,.0f}'.format)
-        st.dataframe(v_disp, use_container_width=True)
-
-        if not show_all_batches:
-            chart_targets = ["6개월 미만", "7개월 미만", "9개월 미만"]
-            chart_df = view_df[view_df[BUCKET_COL].isin(chart_targets)].copy()
-
-            if not chart_df.empty:
-                fig, ax = plt.subplots(figsize=(10, 4)) 
-                sns.barplot(
-                    data=chart_df, 
-                    x=BATCH_COL, 
-                    y=VALUE_COL, 
-                    hue=BUCKET_COL, 
-                    palette="viridis",
-                    ax=ax,
-                    errorbar=None,
-                    width=0.7 
-                )
-                
-                ax.set_title(f"📍 [{selected_label}] 배치별 상세 가치 분석 (6/7/9개월 미만)", fontsize=15, pad=20)
-                ax.set_xlabel("배치 번호", fontsize=12)
-                ax.set_ylabel("재고 가치 (Stock Value)", fontsize=12)
-
-                ax.yaxis.set_major_formatter(ticker.FuncFormatter(lambda x, p: format(int(x), ',')))
-                ax.legend(title="위험 구간", bbox_to_anchor=(1.05, 1), loc='upper left')
-                
-                sns.despine()
-                plt.xticks(rotation=0, ha="right")
-                plt.tight_layout()
-                st.pyplot(fig, use_container_width=True)
+            if show_all_batches:
+                view_df = df_risk_all.sort_values(VALUE_COL, ascending=False).reset_index(drop=True)
             else:
-                st.info("💡 선택한 자재에는 6/7/9개월 미만에 해당하는 배치가 없습니다.")
-    else:
-        st.info("관리 대상 위험 재고가 없습니다.")
+                view_df = df_risk_all[df_risk_all[MAT_COL].astype(str) == selected_mat].sort_values(VALUE_COL, ascending=False).reset_index(drop=True)
+
+            st.write(f"### 📍 상세 리스트 (분석 대상: {selected_label if not show_all_batches else '전체 위험 배치'})")
+            
+            v_disp = view_df[[MAT_COL, MAT_NAME_COL, BATCH_COL, BUCKET_COL, QTY_SRC_COL, VALUE_COL]].copy()
+            v_disp[VALUE_COL] = v_disp[VALUE_COL].map('{:,.0f}'.format)
+            v_disp[QTY_SRC_COL] = v_disp[QTY_SRC_COL].map('{:,.0f}'.format)
+            st.dataframe(v_disp, use_container_width=True)
+
+            if not show_all_batches:
+                chart_targets = ["6개월 미만", "7개월 미만", "9개월 미만"]
+                chart_df = view_df[view_df[BUCKET_COL].isin(chart_targets)].copy()
+
+                if not chart_df.empty:
+                    fig, ax = plt.subplots(figsize=(10, 4)) 
+                    sns.barplot(
+                        data=chart_df, 
+                        x=BATCH_COL, 
+                        y=VALUE_COL, 
+                        hue=BUCKET_COL, 
+                        palette="viridis",
+                        ax=ax,
+                        errorbar=None,
+                        width=0.7 
+                    )
+                    
+                    ax.set_title(f"📍 [{selected_label}] 배치별 상세 가치 분석 (6/7/9개월 미만)", fontsize=15, pad=20)
+                    ax.set_xlabel("배치 번호", fontsize=12)
+                    ax.set_ylabel("재고 가치 (Stock Value)", fontsize=12)
+
+                    ax.yaxis.set_major_formatter(ticker.FuncFormatter(lambda x, p: format(int(x), ',')))
+                    ax.legend(title="위험 구간", bbox_to_anchor=(1.05, 1), loc='upper left')
+                    
+                    sns.despine()
+                    plt.xticks(rotation=0, ha="right")
+                    plt.tight_layout()
+                    st.pyplot(fig, use_container_width=True)
+                else:
+                    st.info("💡 선택한 자재에는 6/7/9개월 미만에 해당하는 배치가 없습니다.")
+        else:
+            st.info("관리 대상 위험 재고가 없습니다.")
 #render_batch_analysis_section(final_df, MAT_COL, MAT_NAME_COL, BATCH_COL, BUCKET_COL, QTY_SRC_COL, VALUE_COL)
 
 # -----------------------------------------------------
@@ -828,16 +934,24 @@ gantt_df = gantt_df.dropna(subset=["sell_start_date", "sell_end_date"]).copy()
 # =========================================================
 # 1) 소분류 선택 UI
 # =========================================================
-st.write("### 🗓️ 소분류별 배치 판매 간트 차트 (no_sales 제외)")
+with st.container():
+    st.markdown("### 🗓️ 소분류별 배치 판매 시뮬레이션")
+    
+    gantt_df["mat_label"] = gantt_df[MAT_COL].astype(str) + " | " + gantt_df[MAT_NAME_COL].astype(str)
 
-gantt_df["mat_label"] = gantt_df[MAT_COL].astype(str) + " | " + gantt_df[MAT_NAME_COL].astype(str)
+# ✅ 부진재고(remaining_qty > 0)가 있는 소분류만 필터링
+risk_subcats = gantt_df[gantt_df["remaining_qty"].fillna(0) > 0]["소분류"].unique().tolist()
 
 subcat_meta = (
-    gantt_df[["대분류", "소분류"]]
+    gantt_df[gantt_df["소분류"].isin(risk_subcats)]
     .fillna("미분류")
     .drop_duplicates(subset=["소분류"], keep="first")
     .copy()
 )
+
+if subcat_meta.empty:
+    st.info("현재 분석 데이터 중 '부진재고'가 발생하는 품목이 없습니다.")
+    st.stop()
 
 subcat_meta["ui_label"] = (
     subcat_meta["대분류"].astype(str)
@@ -849,12 +963,15 @@ subcat_meta["ui_label"] = (
 
 label_to_subcat = dict(zip(subcat_meta["ui_label"], subcat_meta["소분류"]))
 ui_options = ["(전체)"] + sorted(subcat_meta["ui_label"].unique().tolist())
-selected_ui = st.selectbox("소분류 선택", options=ui_options)
+selected_ui = st.selectbox("소분류 선택 (부진재고 발생 소분류만 표시)", options=ui_options)
 
 selected_subcat = None if selected_ui == "(전체)" else label_to_subcat[selected_ui]
 
+# (전체) 선택 시에도 '부진재고'가 있는 데이터만 보여주고 싶다면 아래 필터 추가 가능
+# 여기서는 사용자가 "해당 애들만 선택해서... 보여주도록" 했으므로, 
+# view_df 자체도 부진재고가 있는 subcat들로 제한합니다.
 if selected_subcat is None:
-    view_df = gantt_df.copy()
+    view_df = gantt_df[gantt_df["소분류"].isin(risk_subcats)].copy()
 else:
     view_df = gantt_df[gantt_df["소분류"].fillna("미분류") == selected_subcat].copy()
 
@@ -864,91 +981,35 @@ if selected_subcat is not None:
     )
 
 # =========================================================
-# 2) 간트 차트 생성/표시
+# 1.5) 부진재고 요약 지표 (KPI) - (전체) 및 소분류 공통
 # =========================================================
-if view_df.empty:
-    st.info("표시할 데이터가 없습니다. (no_sales 제외 후 남은 배치가 없거나, sell_start/end가 비어있을 수 있어요.)")
+risk_view_df = view_df[view_df["remaining_qty"].fillna(0) > 0].copy()
+if not risk_view_df.empty:
+    # 단위원가 정보가 없으면 final_df에서 가져옴
+    if "단위원가" not in risk_view_df.columns:
+        unit_cost_map = (
+            final_df[[MAT_COL, "단위원가"]]
+            .dropna(subset=[MAT_COL, "단위원가"])
+            .drop_duplicates(subset=[MAT_COL])
+        )
+        risk_view_df = risk_view_df.merge(unit_cost_map, on=MAT_COL, how="left")
+
+    risk_view_df["단위원가"] = pd.to_numeric(risk_view_df["단위원가"], errors="coerce").fillna(0)
+    risk_view_df["remaining_amount"] = risk_view_df["remaining_qty"].fillna(0) * risk_view_df["단위원가"]
+
+    kpi1, kpi2, kpi3 = st.columns(3)
+    with kpi1:
+        st.metric("부진재고 배치 수", f"{risk_view_df[BATCH_COL].nunique()}개")
+    with kpi2:
+        st.metric("예상 부진재고 금액 합계", f"₩{risk_view_df['remaining_amount'].sum():,.0f}")
+    with kpi3:
+        first_date = risk_view_df["risk_entry_date"].min()
+        st.metric("가장 빠른 부진재고 진입일", first_date.strftime("%Y-%m-%d") if pd.notna(first_date) else "-")
 else:
-    view_df = view_df.copy()
-    view_df["expiry_date"] = pd.to_datetime(base_today) + pd.to_timedelta(view_df["init_days"], unit="D")
-
-    sales_bar = view_df.copy()
-    sales_bar["phase"] = "판매기간"
-    sales_bar = sales_bar.rename(columns={"sell_start_date": "x_start", "sell_end_date": "x_end"})
-
-    sluggish_bar = view_df.copy()
-    sluggish_bar = sluggish_bar[sluggish_bar["remaining_qty"].fillna(0) > 0].copy()
-    sluggish_bar = sluggish_bar.dropna(subset=["risk_entry_date", "expiry_date"]).copy()
-    sluggish_bar["phase"] = "부진재고 구간"
-    sluggish_bar = sluggish_bar.rename(columns={"risk_entry_date": "x_start", "expiry_date": "x_end"})
-
-    plot_df = pd.concat([sales_bar, sluggish_bar], ignore_index=True)
-    plot_df["batch_label"] = plot_df["mat_label"].astype(str) + " | " + plot_df[BATCH_COL].astype(str)
-
-    plot_df = plot_df.sort_values(["mat_label", "init_days", "phase"], ascending=[True, True, True])
-
-    color_map = {"판매기간": "#4C78A8", "부진재고 구간": "#E45756"}
-
-    order_base = plot_df[plot_df["phase"] == "판매기간"].copy()
-    if order_base.empty:
-        order_base = plot_df.copy()
-
-    order_meta = (
-        order_base[["batch_label", "mat_label", "x_start"]]
-        .drop_duplicates(subset=["batch_label"])
-        .rename(columns={"x_start": "sell_start"})
-    )
-
-    order_meta = order_meta.sort_values(["mat_label", "sell_start", "batch_label"], ascending=[True, True, True])
-    y_order = order_meta["batch_label"].tolist()
-
-    plot_df = plot_df.merge(order_meta[["batch_label", "sell_start"]], on="batch_label", how="left")
-    plot_df = plot_df.sort_values(["mat_label", "sell_start", "phase"], ascending=[True, True, True])
-
-    fig = px.timeline(
-        plot_df,
-        x_start="x_start",
-        x_end="x_end",
-        y="batch_label",
-        color="phase",
-        color_discrete_map=color_map,
-        hover_data={
-            MAT_COL: True,
-            MAT_NAME_COL: True,
-            "소분류": True if "소분류" in plot_df.columns else False,
-            "stop_reason": True if "stop_reason" in plot_df.columns else False,
-            "init_days": True if "init_days" in plot_df.columns else False,
-            "init_qty": True if "init_qty" in plot_df.columns else False,
-            "qty_sold": True if "qty_sold" in plot_df.columns else False,
-            "remaining_qty": True if "remaining_qty" in plot_df.columns else False,
-            "sold_days_total": True if "sold_days_total" in plot_df.columns else False,
-            "risk_entry_date": True if "risk_entry_date" in plot_df.columns else False,
-            "expiry_date": True if "expiry_date" in plot_df.columns else False,
-        },
-    )
-
-    fig.update_yaxes(categoryorder="array", categoryarray=y_order)
-    fig.update_yaxes(autorange="reversed")
-    fig.update_layout(
-        height=1000 if selected_ui == "(전체)" else 700,
-        margin=dict(t=30, b=10, l=10, r=10),
-        xaxis_title="기간",
-        yaxis_title="제품 | 배치",
-        xaxis_title_font=dict(size=18, family="Arial Black"),
-        yaxis_title_font=dict(size=18, family="Arial Black"),
-        legend_title_text="",
-    )
-
-    fig.update_xaxes(showgrid=True, gridcolor="rgba(180,180,180,0.4)", gridwidth=1, griddash="dot")
-    fig.update_yaxes(showgrid=True, gridcolor="rgba(180,180,180,0.4)", gridwidth=1, griddash="dot")
-
-    fig.update_yaxes(tickfont=dict(size=15, family="Arial Black"), title_font=dict(size=18, family="Arial Black"))
-    fig.update_xaxes(tickfont=dict(size=16, family="Arial Black"), title_font=dict(size=18, family="Arial Black"))
-
-    #st.plotly_chart(fig, use_container_width=True)
+    st.success("✅ 선택한 범위 내에는 부진재고가 발생할 것으로 예상되는 배치가 없습니다.")
 
 # =========================================================
-# 3) [방법 A] 최소 배수(minmult_df) 먼저 계산
+# 2) [방법 A] 최소 배수(minmult_df) 먼저 계산
 #    → 그 다음 요약 표(table_df)에 merge해서 "한 표"로 출력
 # =========================================================
 if selected_ui != "(전체)" and (not view_df.empty):
@@ -1091,15 +1152,12 @@ if selected_ui != "(전체)" and (not view_df.empty):
         summary_df[UNIT_COST_COL] = pd.to_numeric(summary_df[UNIT_COST_COL], errors="coerce").fillna(0)
         summary_df["remaining_amount"] = summary_df["remaining_qty"].fillna(0) * summary_df[UNIT_COST_COL]
 
-        # KPI
-        c1, c2, c3 = st.columns(3)
-        with c1:
-            st.metric("부진재고 배치 수", f"{summary_df[BATCH_COL].nunique()}개")
-        with c2:
-            st.metric("예상 부진재고 금액 합계", f"₩{summary_df['remaining_amount'].sum():,.0f}")
-        with c3:
-            first_date = summary_df["risk_entry_date"].min()
-            st.metric("가장 빠른 부진재고 진입일", first_date.strftime("%Y-%m-%d") if pd.notna(first_date) else "-")
+        # KPI (위에서 공통으로 표시하므로 여기서는 상세 표 제목만 유지하거나 생략 가능)
+        # 여기서는 이미 위에서 요약 지표를 보여주었으므로, 표 바로 위에는 제목만 남깁니다.
+        # st.write(f"### 🧾 부진재고 상세 (소분류: {selected_subcat})")
+        # 대신 risk_view_df를 활용하여 아래 표(summary_df)를 구성합니다.
+        summary_df = risk_view_df.copy()
+        summary_df = summary_df.sort_values(["risk_entry_date", "init_days"], ascending=[True, True])
 
         # table_df
         table_df = summary_df.copy()
@@ -1146,16 +1204,6 @@ if selected_ui != "(전체)" and (not view_df.empty):
         )
 
         # 표시 컬럼
-        # show_cols = [
-        #     "자재코드",
-        #     "자재내역",
-        #     "배치",
-        #     "3평판",
-        #     "부진재고 진입일",
-        #     "예상부진재고량",
-        #     "예상부진금액",
-        #     "부진재고 0을 위한 최소 배수(추정)",
-        # ]
         show_cols = [
                     "자재코드",
                     "자재내역",
@@ -1166,7 +1214,6 @@ if selected_ui != "(전체)" and (not view_df.empty):
                     "예상부진금액",
                     "권장 판매량",
                     "판매 개선율(%)",
-                    "부진재고 0을 위한 최소 배수(추정)",
                 ]
         show_cols = [c for c in show_cols if c in table_df.columns]
         table_df = table_df[show_cols].copy()
@@ -1199,11 +1246,113 @@ if selected_ui != "(전체)" and (not view_df.empty):
         # ✅ 한 표 출력
         st.dataframe(table_df, use_container_width=True, height=320)
 
-st.plotly_chart(fig, use_container_width=True)
+# =========================================================
+# 3) 간트 차트 생성/표시
+# =========================================================
+if view_df.empty:
+    st.info("표시할 데이터가 없습니다. (no_sales 제외 후 남은 배치가 없거나, sell_start/end가 비어있을 수 있어요.)")
+else:
+    view_df = view_df.copy()
+    view_df["expiry_date"] = pd.to_datetime(base_today) + pd.to_timedelta(view_df["init_days"], unit="D")
 
-        # (선택) 최소배수 표도 따로 보고 싶으면 유지
-        # st.write("### 📌 참고: 자재별 최소 배수 계산 결과(자재 단위)")
-        # st.dataframe(minmult_df, use_container_width=True, height=420)
+    sales_bar = view_df.copy()
+    sales_bar["phase"] = "판매기간"
+    sales_bar = sales_bar.rename(columns={"sell_start_date": "x_start", "sell_end_date": "x_end"})
+
+    sluggish_bar = view_df.copy()
+    sluggish_bar = sluggish_bar[sluggish_bar["remaining_qty"].fillna(0) > 0].copy()
+    sluggish_bar = sluggish_bar.dropna(subset=["risk_entry_date", "expiry_date"]).copy()
+    sluggish_bar["phase"] = "부진재고 구간"
+    sluggish_bar = sluggish_bar.rename(columns={"risk_entry_date": "x_start", "expiry_date": "x_end"})
+
+    plot_df = pd.concat([sales_bar, sluggish_bar], ignore_index=True)
+    plot_df["batch_label"] = plot_df["mat_label"].astype(str) + " | " + plot_df[BATCH_COL].astype(str)
+
+    plot_df = plot_df.sort_values(["mat_label", "init_days", "phase"], ascending=[True, True, True])
+
+    color_map = {"판매기간": "#4C78A8", "부진재고 구간": "#E45756"}
+
+    order_base = plot_df[plot_df["phase"] == "판매기간"].copy()
+    if order_base.empty:
+        order_base = plot_df.copy()
+
+    order_meta = (
+        order_base[["batch_label", "mat_label", "x_start"]]
+        .drop_duplicates(subset=["batch_label"])
+        .rename(columns={"x_start": "sell_start"})
+    )
+
+    order_meta = order_meta.sort_values(["mat_label", "sell_start", "batch_label"], ascending=[True, True, True])
+    y_order = order_meta["batch_label"].tolist()
+
+    plot_df = plot_df.merge(order_meta[["batch_label", "sell_start"]], on="batch_label", how="left")
+    plot_df = plot_df.sort_values(["mat_label", "sell_start", "phase"], ascending=[True, True, True])
+
+    fig = px.timeline(
+        plot_df,
+        x_start="x_start",
+        x_end="x_end",
+        y="batch_label",
+        color="phase",
+        color_discrete_map=color_map,
+        hover_data={
+            MAT_COL: True,
+            MAT_NAME_COL: True,
+            "소분류": True if "소분류" in plot_df.columns else False,
+            "stop_reason": True if "stop_reason" in plot_df.columns else False,
+            "init_days": True if "init_days" in plot_df.columns else False,
+            "init_qty": True if "init_qty" in plot_df.columns else False,
+            "qty_sold": True if "qty_sold" in plot_df.columns else False,
+            "remaining_qty": True if "remaining_qty" in plot_df.columns else False,
+            "sold_days_total": True if "sold_days_total" in plot_df.columns else False,
+            "risk_entry_date": True if "risk_entry_date" in plot_df.columns else False,
+            "expiry_date": True if "expiry_date" in plot_df.columns else False,
+        },
+    )
+
+    fig.update_yaxes(categoryorder="array", categoryarray=y_order)
+    fig.update_yaxes(autorange="reversed")
+
+    # ✅ 배치 수에 따른 동적 높이 계산 (최소 400px, 배치당 30px + 여백)
+    dynamic_height = max(400, len(y_order) * 30 + 120)
+
+    fig.update_layout(
+        height=dynamic_height,
+        margin=dict(t=50, b=50, l=10, r=10),
+        xaxis_title="Simulation Timeline",
+        yaxis_title="Material | Batch",
+        xaxis_title_font=dict(size=14),
+        yaxis_title_font=dict(size=14),
+        legend=dict(
+            orientation="h",
+            yanchor="bottom",
+            y=1.02,
+            xanchor="right",
+            x=1
+        ),
+        plot_bgcolor="white",
+        paper_bgcolor="white",
+    )
+
+    fig.update_xaxes(
+        showgrid=True, 
+        gridcolor="#f1f5f9", 
+        gridwidth=1,
+        dtick="M1", # 매달 그리드
+        tickformat="%Y-%m",
+        tickfont=dict(size=12)
+    )
+    fig.update_yaxes(
+        showgrid=True, 
+        gridcolor="#f1f5f9", 
+        gridwidth=1,
+        tickfont=dict(size=11)
+    )
+    
+    # 바 테두리 및 투명도 조절
+    fig.update_traces(marker_line_color='white', marker_line_width=1, opacity=0.9)
+
+    st.plotly_chart(fig, use_container_width=True)
 
 # -----------------------------------------------------
 # 7️⃣ 가공된 데이터 최종 등록 (계층: 연도 -> 월 -> 분석타입) (ON)
@@ -1226,14 +1375,16 @@ st.session_state["stock_data"][selected_year][selected_month]["유효기한"] = 
 }
 
 st.sidebar.success(f"✅ {selected_year} {selected_month} 유효기한 분석 완료")
-st.write("---")
-d1, d2, _ = st.columns([1, 1, 2])
-with d1:
-    csv_bytes = final_df.to_csv(index=False).encode("utf-8-sig")
-    st.download_button(
-        label="⬇️ CSV 다운로드", 
-        data=csv_bytes, 
-        file_name=f"{selected_year}_{selected_month}_유효기한.csv", 
-        mime="text/csv"
-    )
+with st.container():
+    st.write("---")
+    d1, d2, _ = st.columns([1, 1, 2])
+    with d1:
+        csv_bytes = final_df.to_csv(index=False).encode("utf-8-sig")
+        st.download_button(
+            label="⬇️ CSV 다운로드", 
+            data=csv_bytes, 
+            file_name=f"{selected_year}_{selected_month}_유효기한.csv", 
+            mime="text/csv",
+            use_container_width=True
+        )
 
