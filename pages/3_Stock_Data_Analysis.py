@@ -263,20 +263,22 @@ if not all_dfs_store:
 
 # --- 📅 [수정] 분석 대상 연도 및 월 선택 ---
 st.sidebar.header("📂 분석 대상 선택")
-available_years = sorted(list(all_dfs_store.keys()))
-selected_year = st.sidebar.selectbox("📅 연도 선택", options=available_years)
+current_year = datetime.now().year
+selected_year = st.sidebar.selectbox(
+    "📅 연도 선택",
+    options=[f"{y}년" for y in range(2023, 2041)],
+    index=range(2023, 2041).index(current_year) if current_year in range(2023, 2041) else 0
+)
 
+selected_month = st.sidebar.selectbox(
+    "📆 월 선택",
+    options=[f"{m}월" for m in range(1, 13)],
+    index=datetime.now().month - 1
+)
+
+# 선택된 연도/월의 데이터 뭉치 가져오기 (세션 상태)
 year_data = all_dfs_store.get(selected_year, {})
-available_months = sorted(list(year_data.keys()))
-
-if not available_months:
-    st.error(f"{selected_year}에 저장된 월 데이터가 없습니다.")
-    st.stop()
-
-selected_month = st.sidebar.selectbox("📆 월 선택", options=available_months)
-
-# 선택된 연도/월의 데이터 뭉치 가져오기
-target_dfs = year_data[selected_month]
+target_dfs = year_data.get(selected_month)
 
 BASE_DATA_DIR = Path("Datas")
 
@@ -293,7 +295,7 @@ if use_cache:
         final_df = load_stock_csv(selected_year, selected_month)
     st.success(f"✅ 캐시 로드 완료: {stock_csv_path}")
 
-else:
+elif target_dfs is not None:
     # 캐시가 없을 때만 기존 UI/빌드 로직 실행
     with st.expander(f"📁 {selected_year} {selected_month} 분석 대상 파일 확인", expanded=False):
         file_info = []
@@ -308,6 +310,11 @@ else:
     # ✅ 생성 후 로컬에 저장
     saved_path = save_stock_csv(final_df, selected_year, selected_month)
     st.success(f"✅ Stock.csv 저장 완료: {saved_path}")
+
+else:
+    st.warning(f"⚠️ {selected_year} {selected_month}에 해당하는 데이터가 없습니다.")
+    st.info("먼저 업로드 페이지에서 데이터를 업로드하거나, 기존 분석 결과(Stock.csv)가 있는지 확인해 주세요.")
+    st.stop()
 
 
 # -----------------------------------------------------
