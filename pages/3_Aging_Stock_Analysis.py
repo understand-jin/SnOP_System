@@ -321,7 +321,7 @@ else:
 # 1️⃣ 기간별 위험 자재 요약 (ON)
 # -----------------------------------------------------
 with st.container():
-    st.markdown("### 📊 한눈에 보는 재고 리스크")
+    st.markdown("### 📊 부진재고 리스크")
     
     # 상단 요약 지표 (KPI)
     total_value = final_df[VALUE_COL].sum()
@@ -339,45 +339,12 @@ with st.container():
     m3.metric("분석 대상 자재 수", f"{total_count:,}종")
 
     st.markdown("---")
-    st.markdown(f"#### 🚨 {selected_year} {selected_month} 기간별 상세 요약")
-    tab6, tab7, tab9, tab12 = st.tabs(
-        ["⚠️ 6개월 미만", "🔔 7개월 미만", "ℹ️ 9개월 미만", "📅 12개월 미만"]
-    )
+    with st.container(border=True):
+        st.markdown(f"#### 🚨 {selected_year} {selected_month} 기간별 상세 요약")
+        tab6, tab7, tab9, tab12 = st.tabs(
+            ["⚠️ 6개월 미만", "🔔 7개월 미만", "ℹ️ 9개월 미만", "📅 12개월 미만"]
+        )
 
-# def display_risk_summary(target_buckets, tab_obj, title):
-#     with tab_obj:
-#         risk_df = final_df[final_df[BUCKET_COL].isin(target_buckets)].copy()
-#         if risk_df.empty:
-#             st.success(f"✅ {title} 내에 해당하는 자재가 없습니다.")
-#             return
-
-#         # ✅ 자재 단위 요약 + 배치 정보 포함
-#         summary = (
-#             risk_df.groupby([MAT_COL, MAT_NAME_COL], as_index=False)
-#             .agg(
-#                 배치수=("배치", "nunique"),
-#                 배치목록=("배치", lambda s: ", ".join(map(str, pd.Series(s).dropna().unique()[:10]))),
-#                 **{QTY_SRC_COL: (QTY_SRC_COL, "sum"),
-#                    VALUE_COL: (VALUE_COL, "sum")}
-#             )
-#             .sort_values(VALUE_COL, ascending=False)
-#             .reset_index(drop=True)
-#         )
-
-#         # (1) ✅ 메트릭은 1:1로만
-#         c1, c2 = st.columns(2)
-#         c1.metric(f"{title} 자재 수", f"{len(summary)}종")
-#         c2.metric("총 위험 금액", f"₩{summary[VALUE_COL].sum():,.0f}")
-
-#         # (2) ✅ 표는 바로 아래 + 배치 정보 컬럼 포함
-#         disp = summary.copy()
-#         disp[VALUE_COL] = disp[VALUE_COL].map(lambda x: f"{x:,.0f}")
-#         disp[QTY_SRC_COL] = disp[QTY_SRC_COL].map(lambda x: f"{x:,.0f}")
-
-#         disp = disp.rename(columns={QTY_SRC_COL: "부진재고 수량", VALUE_COL: "부진재고 금액"})
-#         # 컬럼 순서 보기 좋게 정리 (원하면 더 수정 가능)
-#         show_cols = [MAT_COL, MAT_NAME_COL, "배치수", "배치목록", "부진재고 수량", "부진재고 금액"]
-#         st.dataframe(disp[show_cols], use_container_width=True, height=600)
 
 def display_risk_summary(target_buckets, tab_obj, title):
     with tab_obj:
@@ -484,7 +451,23 @@ def display_risk_summary(target_buckets, tab_obj, title):
             "버킷", "유효기간", "남은 일(Day)", "3평판",
             "부진재고 수량", "부진재고 금액",
         ]
-        st.dataframe(disp[show_cols], use_container_width=True, height=600)
+        
+        # ✅ 데이터 테이블 스타일링: Bold 처리 및 특정 컬럼 강조
+        styled_disp = disp[show_cols].style.set_properties(**{'font-weight': 'bold'})
+        
+        def highlight_columns(x):
+            df = x.copy()
+            df.loc[:, :] = ''
+            # 강조할 컬럼 리스트
+            target_cols = ['버킷', '유효기간', '부진재고 금액']
+            for col in target_cols:
+                if col in df.columns:
+                    df.loc[:, col] = 'background-color: #fff3e0' # 부드러운 오렌지/옐로우 계열 강조색
+            return df
+            
+        styled_disp = styled_disp.apply(highlight_columns, axis=None)
+        
+        st.dataframe(styled_disp, use_container_width=True, height=600)
 
 
 risk_base = ["폐기확정(유효기한 지남)", "1개월 미만", "2개월 미만", "3개월 미만", "4개월 미만", "5개월 미만"]
@@ -941,425 +924,445 @@ gantt_df = gantt_df.dropna(subset=["sell_start_date", "sell_end_date"]).copy()
 # =========================================================
 # 1) 소분류 선택 UI
 # =========================================================
-with st.container():
+
+st.divider()
+
+with st.container(border=True):
     st.markdown("### 🗓️ 소분류별 배치 판매 시뮬레이션")
     
     gantt_df["mat_label"] = gantt_df[MAT_COL].astype(str) + " | " + gantt_df[MAT_NAME_COL].astype(str)
 
-# ✅ 부진재고(remaining_qty > 0)가 있는 소분류만 필터링
-risk_subcats = gantt_df[gantt_df["remaining_qty"].fillna(0) > 0]["소분류"].unique().tolist()
+    # ✅ 부진재고(remaining_qty > 0)가 있는 소분류만 필터링
+    risk_subcats = gantt_df[gantt_df["remaining_qty"].fillna(0) > 0]["소분류"].unique().tolist()
 
-subcat_meta = (
-    gantt_df[gantt_df["소분류"].isin(risk_subcats)]
-    .fillna("미분류")
-    .drop_duplicates(subset=["소분류"], keep="first")
-    .copy()
-)
-
-if subcat_meta.empty:
-    st.info("현재 분석 데이터 중 '부진재고'가 발생하는 품목이 없습니다.")
-    st.stop()
-
-subcat_meta["ui_label"] = (
-    subcat_meta["대분류"].astype(str)
-    + "("
-    + subcat_meta["소분류"].astype(str)
-    + ") | "
-    + subcat_meta["소분류"].astype(str)
-)
-
-label_to_subcat = dict(zip(subcat_meta["ui_label"], subcat_meta["소분류"]))
-ui_options = ["(전체)"] + sorted(subcat_meta["ui_label"].unique().tolist())
-selected_ui = st.selectbox("소분류 선택 (부진재고 발생 소분류만 표시)", options=ui_options)
-
-selected_subcat = None if selected_ui == "(전체)" else label_to_subcat[selected_ui]
-
-# (전체) 선택 시에도 '부진재고'가 있는 데이터만 보여주고 싶다면 아래 필터 추가 가능
-# 여기서는 사용자가 "해당 애들만 선택해서... 보여주도록" 했으므로, 
-# view_df 자체도 부진재고가 있는 subcat들로 제한합니다.
-if selected_subcat is None:
-    view_df = gantt_df[gantt_df["소분류"].isin(risk_subcats)].copy()
-else:
-    view_df = gantt_df[gantt_df["소분류"].fillna("미분류") == selected_subcat].copy()
-
-if selected_subcat is not None:
-    st.caption(
-        f"선택 소분류: {selected_ui}  |  제품 수: {view_df[MAT_COL].nunique()}개 / 배치 수: {view_df[BATCH_COL].nunique()}개"
+    subcat_meta = (
+        gantt_df[gantt_df["소분류"].isin(risk_subcats)]
+        .fillna("미분류")
+        .drop_duplicates(subset=["소분류"], keep="first")
+        .copy()
     )
 
-# =========================================================
-# 1.5) 부진재고 요약 지표 (KPI) - (전체) 및 소분류 공통
-# =========================================================
-risk_view_df = view_df[view_df["remaining_qty"].fillna(0) > 0].copy()
-if not risk_view_df.empty:
-    # 단위원가 정보가 없으면 final_df에서 가져옴
-    if "단위원가" not in risk_view_df.columns:
-        unit_cost_map = (
-            final_df[[MAT_COL, "단위원가"]]
-            .dropna(subset=[MAT_COL, "단위원가"])
-            .drop_duplicates(subset=[MAT_COL])
-        )
-        risk_view_df = risk_view_df.merge(unit_cost_map, on=MAT_COL, how="left")
+    if subcat_meta.empty:
+        st.info("현재 분석 데이터 중 '부진재고'가 발생하는 품목이 없습니다.")
+        st.stop()
 
-    risk_view_df["단위원가"] = pd.to_numeric(risk_view_df["단위원가"], errors="coerce").fillna(0)
-    risk_view_df["remaining_amount"] = risk_view_df["remaining_qty"].fillna(0) * risk_view_df["단위원가"]
+    subcat_meta["ui_label"] = (
+        subcat_meta["대분류"].astype(str)
+        + "("
+        + subcat_meta["소분류"].astype(str)
+        + ") | "
+        + subcat_meta["소분류"].astype(str)
+    )
 
-    kpi1, kpi2, kpi3 = st.columns(3)
-    with kpi1:
-        st.metric("부진재고 배치 수", f"{risk_view_df[BATCH_COL].nunique()}개")
-    with kpi2:
-        st.metric("예상 부진재고 금액 합계", f"₩{risk_view_df['remaining_amount'].sum():,.0f}")
-    with kpi3:
-        first_date = risk_view_df["risk_entry_date"].min()
-        st.metric("가장 빠른 부진재고 진입일", first_date.strftime("%Y-%m-%d") if pd.notna(first_date) else "-")
-else:
-    st.success("✅ 선택한 범위 내에는 부진재고가 발생할 것으로 예상되는 배치가 없습니다.")
+    label_to_subcat = dict(zip(subcat_meta["ui_label"], subcat_meta["소분류"]))
+    ui_options = ["(전체)"] + sorted(subcat_meta["ui_label"].unique().tolist())
+    selected_ui = st.selectbox("소분류 선택 (부진재고 발생 소분류만 표시)", options=ui_options)
 
-# =========================================================
-# 2) [방법 A] 최소 배수(minmult_df) 먼저 계산
-#    → 그 다음 요약 표(table_df)에 merge해서 "한 표"로 출력
-# =========================================================
-if selected_ui != "(전체)" and (not view_df.empty):
+    selected_subcat = None if selected_ui == "(전체)" else label_to_subcat[selected_ui]
 
-    # ✅ 기준(1.0x)에서 부진재고가 남는 row만
-    base_risk_df = view_df[view_df["remaining_qty"].fillna(0) > 0].copy()
-
-    if base_risk_df.empty:
-        st.success("현재 소분류는 기준 평판(1.0x) 시나리오에서 부진재고가 없습니다.")
+    # (전체) 선택 시에도 '부진재고'가 있는 데이터만 보여주고 싶다면 아래 필터 추가 가능
+    # 여기서는 사용자가 "해당 애들만 선택해서... 보여주도록" 했으므로, 
+    # view_df 자체도 부진재고가 있는 subcat들로 제한합니다.
+    if selected_subcat is None:
+        view_df = gantt_df[gantt_df["소분류"].isin(risk_subcats)].copy()
     else:
-        # ---------------------------------------------------------
-        # (A-1) 최소 배수 계산 대상 자재 목록
-        # ---------------------------------------------------------
-        risk_mats = base_risk_df[MAT_COL].dropna().unique().tolist()
-        sub_df_base = final_df[final_df[MAT_COL].isin(risk_mats)].copy()
+        view_df = gantt_df[gantt_df["소분류"].fillna("미분류") == selected_subcat].copy()
 
-        # st.write("### 🎯 (부진재고 발생 자재만) 부진재고 0을 위한 최소 평판 배수 (소분류 기준)")
-        # st.caption("※ 기준(1.0x)에서 부진재고가 발생한 자재만 대상으로 최소 배수를 계산합니다.")
+    if selected_subcat is not None:
+        st.caption(
+            f"선택 소분류: {selected_ui}  |  제품 수: {view_df[MAT_COL].nunique()}개 / 배치 수: {view_df[BATCH_COL].nunique()}개"
+        )
 
-        if "3평판" not in sub_df_base.columns:
-            st.warning("final_df에 '3평판' 컬럼이 없어 최소 배수를 계산할 수 없습니다.")
-            minmult_df = pd.DataFrame(columns=["자재코드", "자재내역", "3평판", "부진재고 0을 위한 최소 배수(추정)", "비고"])
+    # =========================================================
+    # 1.5) 부진재고 요약 지표 (KPI) - (전체) 및 소분류 공통
+    # =========================================================
+    risk_view_df = view_df[view_df["remaining_qty"].fillna(0) > 0].copy()
+    if not risk_view_df.empty:
+        # 단위원가 정보가 없으면 final_df에서 가져옴
+        if "단위원가" not in risk_view_df.columns:
+            unit_cost_map = (
+                final_df[[MAT_COL, "단위원가"]]
+                .dropna(subset=[MAT_COL, "단위원가"])
+                .drop_duplicates(subset=[MAT_COL])
+            )
+            risk_view_df = risk_view_df.merge(unit_cost_map, on=MAT_COL, how="left")
+
+        risk_view_df["단위원가"] = pd.to_numeric(risk_view_df["단위원가"], errors="coerce").fillna(0)
+        risk_view_df["remaining_amount"] = risk_view_df["remaining_qty"].fillna(0) * risk_view_df["단위원가"]
+
+        kpi1, kpi2, kpi3 = st.columns(3)
+        with kpi1:
+            st.metric("부진재고 배치 수", f"{risk_view_df[BATCH_COL].nunique()}개")
+        with kpi2:
+            st.metric("예상 부진재고 금액 합계", f"₩{risk_view_df['remaining_amount'].sum():,.0f}")
+        with kpi3:
+            first_date = risk_view_df["risk_entry_date"].min()
+            st.metric("가장 빠른 부진재고 진입일", first_date.strftime("%Y-%m-%d") if pd.notna(first_date) else "-")
+    else:
+        st.success("✅ 선택한 범위 내에는 부진재고가 발생할 것으로 예상되는 배치가 없습니다.")
+
+    # =========================================================
+    # 2) [방법 A] 최소 배수(minmult_df) 먼저 계산
+    #    → 그 다음 요약 표(table_df)에 merge해서 "한 표"로 출력
+    # =========================================================
+    if selected_ui != "(전체)" and (not view_df.empty):
+
+        # ✅ 기준(1.0x)에서 부진재고가 남는 row만
+        base_risk_df = view_df[view_df["remaining_qty"].fillna(0) > 0].copy()
+
+        if base_risk_df.empty:
+            st.success("현재 소분류는 기준 평판(1.0x) 시나리오에서 부진재고가 없습니다.")
         else:
-            sales_series = pd.to_numeric(sub_df_base["3평판"], errors="coerce").fillna(0)
-            if sales_series.sum() <= 0:
-                st.warning("이 소분류는 3평판 값이 0(또는 없음)이라 최소 배수를 계산할 수 없습니다.")
+            # ---------------------------------------------------------
+            # (A-1) 최소 배수 계산 대상 자재 목록
+            # ---------------------------------------------------------
+            risk_mats = base_risk_df[MAT_COL].dropna().unique().tolist()
+            sub_df_base = final_df[final_df[MAT_COL].isin(risk_mats)].copy()
+
+            # st.write("### 🎯 (부진재고 발생 자재만) 부진재고 0을 위한 최소 평판 배수 (소분류 기준)")
+            # st.caption("※ 기준(1.0x)에서 부진재고가 발생한 자재만 대상으로 최소 배수를 계산합니다.")
+
+            if "3평판" not in sub_df_base.columns:
+                st.warning("final_df에 '3평판' 컬럼이 없어 최소 배수를 계산할 수 없습니다.")
                 minmult_df = pd.DataFrame(columns=["자재코드", "자재내역", "3평판", "부진재고 0을 위한 최소 배수(추정)", "비고"])
             else:
-                # ---------- 유틸 ----------
-                def _risk_summary(detail_k: pd.DataFrame):
-                    risk_k = detail_k[detail_k["remaining_qty"].fillna(0) > 0].copy()
+                sales_series = pd.to_numeric(sub_df_base["3평판"], errors="coerce").fillna(0)
+                if sales_series.sum() <= 0:
+                    st.warning("이 소분류는 3평판 값이 0(또는 없음)이라 최소 배수를 계산할 수 없습니다.")
+                    minmult_df = pd.DataFrame(columns=["자재코드", "자재내역", "3평판", "부진재고 0을 위한 최소 배수(추정)", "비고"])
+                else:
+                    # ---------- 유틸 ----------
+                    def _risk_summary(detail_k: pd.DataFrame):
+                        risk_k = detail_k[detail_k["remaining_qty"].fillna(0) > 0].copy()
 
-                    risk_qty = float(
-                        pd.to_numeric(risk_k["remaining_qty"], errors="coerce").fillna(0).sum()
-                    ) if not risk_k.empty else 0.0
+                        risk_qty = float(
+                            pd.to_numeric(risk_k["remaining_qty"], errors="coerce").fillna(0).sum()
+                        ) if not risk_k.empty else 0.0
 
-                    if (not risk_k.empty) and ("remaining_amount" in risk_k.columns):
-                        risk_amt = float(pd.to_numeric(risk_k["remaining_amount"], errors="coerce").fillna(0).sum())
-                    else:
-                        if (not risk_k.empty) and ("단위원가" in risk_k.columns):
-                            uc = pd.to_numeric(risk_k["단위원가"], errors="coerce").fillna(0)
-                            rq = pd.to_numeric(risk_k["remaining_qty"], errors="coerce").fillna(0)
-                            risk_amt = float((rq * uc).sum())
+                        if (not risk_k.empty) and ("remaining_amount" in risk_k.columns):
+                            risk_amt = float(pd.to_numeric(risk_k["remaining_amount"], errors="coerce").fillna(0).sum())
                         else:
-                            risk_amt = np.nan
-                    return {"risk_qty": risk_qty, "risk_amt": risk_amt}
+                            if (not risk_k.empty) and ("단위원가" in risk_k.columns):
+                                uc = pd.to_numeric(risk_k["단위원가"], errors="coerce").fillna(0)
+                                rq = pd.to_numeric(risk_k["remaining_qty"], errors="coerce").fillna(0)
+                                risk_amt = float((rq * uc).sum())
+                            else:
+                                risk_amt = np.nan
+                        return {"risk_qty": risk_qty, "risk_amt": risk_amt}
 
-                def _run_sim_mat(df_mat: pd.DataFrame, mult: float):
-                    df_in = df_mat.copy()
-                    df_in["_sales_k"] = pd.to_numeric(df_in["3평판"], errors="coerce").fillna(0) * mult
+                    def _run_sim_mat(df_mat: pd.DataFrame, mult: float):
+                        df_in = df_mat.copy()
+                        df_in["_sales_k"] = pd.to_numeric(df_in["3평판"], errors="coerce").fillna(0) * mult
 
-                    detail_k, _ = simulate_batches_by_product(
-                        df=df_in,
-                        product_cols=(MAT_COL, MAT_NAME_COL),
-                        batch_col=BATCH_COL,
-                        days_col=DAYS_COL,
-                        qty_col=QTY_SRC_COL,
-                        monthly_sales_col="_sales_k",
-                        risk_days=180,
-                        step_days=30,
-                        today=base_today,
-                    )
-                    return detail_k
+                        detail_k, _ = simulate_batches_by_product(
+                            df=df_in,
+                            product_cols=(MAT_COL, MAT_NAME_COL),
+                            batch_col=BATCH_COL,
+                            days_col=DAYS_COL,
+                            qty_col=QTY_SRC_COL,
+                            monthly_sales_col="_sales_k",
+                            risk_days=180,
+                            step_days=30,
+                            today=base_today,
+                        )
+                        return detail_k
 
-                def _risk_metric_mat(df_mat: pd.DataFrame, mult: float) -> float:
-                    detail_k = _run_sim_mat(df_mat, mult)
-                    s = _risk_summary(detail_k)
-                    if not np.isnan(s["risk_amt"]):
-                        return s["risk_amt"]
-                    return s["risk_qty"]
+                    def _risk_metric_mat(df_mat: pd.DataFrame, mult: float) -> float:
+                        detail_k = _run_sim_mat(df_mat, mult)
+                        s = _risk_summary(detail_k)
+                        if not np.isnan(s["risk_amt"]):
+                            return s["risk_amt"]
+                        return s["risk_qty"]
 
-                def _find_min_multiplier_mat(df_mat: pd.DataFrame, lo=1.0, hi=6.0, tol=1e-3, max_iter=50):
-                    if _risk_metric_mat(df_mat, lo) <= 0:
-                        return lo
-                    if _risk_metric_mat(df_mat, hi) > 0:
-                        return None
+                    def _find_min_multiplier_mat(df_mat: pd.DataFrame, lo=1.0, hi=6.0, tol=1e-3, max_iter=50):
+                        if _risk_metric_mat(df_mat, lo) <= 0:
+                            return lo
+                        if _risk_metric_mat(df_mat, hi) > 0:
+                            return None
 
-                    a, b = lo, hi
-                    for _ in range(max_iter):
-                        mid = (a + b) / 2
-                        v = _risk_metric_mat(df_mat, mid)
-                        if v > 0:
-                            a = mid
-                        else:
-                            b = mid
-                        if (b - a) < tol:
-                            break
-                    return b
+                        a, b = lo, hi
+                        for _ in range(max_iter):
+                            mid = (a + b) / 2
+                            v = _risk_metric_mat(df_mat, mid)
+                            if v > 0:
+                                a = mid
+                            else:
+                                b = mid
+                            if (b - a) < tol:
+                                break
+                        return b
 
-                # ---------- 계산 ----------
-                minmult_rows = []
-                for mat in sorted(sub_df_base[MAT_COL].dropna().unique().tolist()):
-                    df_mat = sub_df_base[sub_df_base[MAT_COL] == mat].copy()
+                    # ---------- 계산 ----------
+                    minmult_rows = []
+                    for mat in sorted(sub_df_base[MAT_COL].dropna().unique().tolist()):
+                        df_mat = sub_df_base[sub_df_base[MAT_COL] == mat].copy()
 
-                    mat_name = ""
-                    if MAT_NAME_COL in df_mat.columns and df_mat[MAT_NAME_COL].notna().any():
-                        mat_name = str(df_mat[MAT_NAME_COL].dropna().iloc[0])
+                        mat_name = ""
+                        if MAT_NAME_COL in df_mat.columns and df_mat[MAT_NAME_COL].notna().any():
+                            mat_name = str(df_mat[MAT_NAME_COL].dropna().iloc[0])
 
-                    base_sales = float(pd.to_numeric(df_mat["3평판"], errors="coerce").fillna(0).iloc[0])
+                        base_sales = float(pd.to_numeric(df_mat["3평판"], errors="coerce").fillna(0).iloc[0])
 
-                    if base_sales <= 0:
+                        if base_sales <= 0:
+                            minmult_rows.append({
+                                "자재코드": mat,
+                                "자재내역": mat_name,
+                                "3평판": base_sales,
+                                "부진재고 0을 위한 최소 배수(추정)": "- (3평판=0)",
+                                "비고": "판매량 0 → 배수로 개선 불가",
+                            })
+                            continue
+
+                        min_m = _find_min_multiplier_mat(df_mat, lo=1.0, hi=6.0)
+
                         minmult_rows.append({
                             "자재코드": mat,
                             "자재내역": mat_name,
                             "3평판": base_sales,
-                            "부진재고 0을 위한 최소 배수(추정)": "- (3평판=0)",
-                            "비고": "판매량 0 → 배수로 개선 불가",
+                            "부진재고 0을 위한 최소 배수(추정)": "-" if min_m is None else f"{min_m:.2f}x",
+                            "비고": "20.0x까지도 0이 안 됨" if min_m is None else "D-180 기준 잔존 0 달성",
                         })
-                        continue
 
-                    min_m = _find_min_multiplier_mat(df_mat, lo=1.0, hi=6.0)
+                    minmult_df = pd.DataFrame(minmult_rows).sort_values(["자재코드"]).reset_index(drop=True)
 
-                    minmult_rows.append({
-                        "자재코드": mat,
-                        "자재내역": mat_name,
-                        "3평판": base_sales,
-                        "부진재고 0을 위한 최소 배수(추정)": "-" if min_m is None else f"{min_m:.2f}x",
-                        "비고": "20.0x까지도 0이 안 됨" if min_m is None else "D-180 기준 잔존 0 달성",
-                    })
+            # ---------------------------------------------------------
+            # (A-2) 요약표(table_df) 생성 + minmult_df를 "한 표"로 merge
+            # ---------------------------------------------------------
+            st.write(f"### 🧾 부진재고 요약 (소분류: {selected_subcat})")
 
-                minmult_df = pd.DataFrame(minmult_rows).sort_values(["자재코드"]).reset_index(drop=True)
+            summary_df = view_df[view_df["remaining_qty"].fillna(0) > 0].copy()
+            summary_df = summary_df.sort_values(["risk_entry_date", "init_days"], ascending=[True, True])
 
-        # ---------------------------------------------------------
-        # (A-2) 요약표(table_df) 생성 + minmult_df를 "한 표"로 merge
-        # ---------------------------------------------------------
-        st.write(f"### 🧾 부진재고 요약 (소분류: {selected_subcat})")
+            UNIT_COST_COL = "단위원가"
+            if UNIT_COST_COL not in summary_df.columns:
+                unit_cost_map = (
+                    final_df[[MAT_COL, UNIT_COST_COL]]
+                    .dropna(subset=[MAT_COL, UNIT_COST_COL])
+                    .drop_duplicates(subset=[MAT_COL])
+                )
+                summary_df = summary_df.merge(unit_cost_map, on=MAT_COL, how="left")
 
-        summary_df = view_df[view_df["remaining_qty"].fillna(0) > 0].copy()
-        summary_df = summary_df.sort_values(["risk_entry_date", "init_days"], ascending=[True, True])
+            summary_df[UNIT_COST_COL] = pd.to_numeric(summary_df[UNIT_COST_COL], errors="coerce").fillna(0)
+            summary_df["remaining_amount"] = summary_df["remaining_qty"].fillna(0) * summary_df[UNIT_COST_COL]
 
-        UNIT_COST_COL = "단위원가"
-        if UNIT_COST_COL not in summary_df.columns:
-            unit_cost_map = (
-                final_df[[MAT_COL, UNIT_COST_COL]]
-                .dropna(subset=[MAT_COL, UNIT_COST_COL])
-                .drop_duplicates(subset=[MAT_COL])
+            # KPI (위에서 공통으로 표시하므로 여기서는 상세 표 제목만 유지하거나 생략 가능)
+            # 여기서는 이미 위에서 요약 지표를 보여주었으므로, 표 바로 위에는 제목만 남깁니다.
+            # st.write(f"### 🧾 부진재고 상세 (소분류: {selected_subcat})")
+            # 대신 risk_view_df를 활용하여 아래 표(summary_df)를 구성합니다.
+            summary_df = risk_view_df.copy()
+            summary_df = summary_df.sort_values(["risk_entry_date", "init_days"], ascending=[True, True])
+
+            # table_df
+            table_df = summary_df.copy()
+            table_df = table_df.rename(columns={
+                MAT_COL: "자재코드",
+                MAT_NAME_COL: "자재내역",
+                BATCH_COL: "배치",
+                "risk_entry_date": "부진재고 진입일",
+                "remaining_qty": "예상부진재고량",
+                "remaining_amount": "예상부진금액",
+            })
+
+            # ✅ minmult_df(자재 단위) 붙이기
+            mult_map = minmult_df[["자재코드", "3평판", "부진재고 0을 위한 최소 배수(추정)", "비고"]].drop_duplicates(subset=["자재코드"])
+            table_df = table_df.merge(mult_map, on="자재코드", how="left")
+
+            # ✅ 최소배수 문자열("1.20x") -> float(1.20)로 파싱
+            def parse_multiplier(v):
+                if pd.isna(v):
+                    return np.nan
+                s = str(v).strip()
+                # "-", "- (3평판=0)" 같은 케이스
+                if s == "-" or s.startswith("-"):
+                    return np.nan
+                m = re.search(r"([0-9]*\.?[0-9]+)\s*x", s.lower())
+                return float(m.group(1)) if m else np.nan
+
+            # 1) 숫자형 3평판 확보 (계산용 원본)
+            sales_num = pd.to_numeric(table_df["3평판"], errors="coerce")
+
+            # 2) 최소배수 float
+            mult_num = table_df["부진재고 0을 위한 최소 배수(추정)"].apply(parse_multiplier)
+
+            # 3) 권장 판매량 / 판매 개선율(%)
+            table_df["권장 판매량"] = (sales_num * mult_num).round(0)
+            table_df["판매 개선율(%)"] = ((mult_num - 1.0) * 100).round(0)
+
+            # 4) 표시 포맷 (최소배수 없는 애들은 빈칸)
+            table_df["권장 판매량"] = pd.to_numeric(table_df["권장 판매량"], errors="coerce").apply(
+                lambda x: f"{int(x):,}" if pd.notna(x) else "-"
             )
-            summary_df = summary_df.merge(unit_cost_map, on=MAT_COL, how="left")
+            table_df["판매 개선율(%)"] = pd.to_numeric(table_df["판매 개선율(%)"], errors="coerce").apply(
+                lambda x: f"{int(x)}% 증가" if pd.notna(x) else "-"
+            )
 
-        summary_df[UNIT_COST_COL] = pd.to_numeric(summary_df[UNIT_COST_COL], errors="coerce").fillna(0)
-        summary_df["remaining_amount"] = summary_df["remaining_qty"].fillna(0) * summary_df[UNIT_COST_COL]
+            # 표시 컬럼
+            show_cols = [
+                        "자재코드",
+                        "자재내역",
+                        "배치",
+                        "3평판",
+                        "부진재고 진입일",
+                        "예상부진재고량",
+                        "예상부진금액",
+                        "권장 판매량",
+                        "판매 개선율(%)",
+                    ]
+            show_cols = [c for c in show_cols if c in table_df.columns]
+            table_df = table_df[show_cols].copy()
 
-        # KPI (위에서 공통으로 표시하므로 여기서는 상세 표 제목만 유지하거나 생략 가능)
-        # 여기서는 이미 위에서 요약 지표를 보여주었으므로, 표 바로 위에는 제목만 남깁니다.
-        # st.write(f"### 🧾 부진재고 상세 (소분류: {selected_subcat})")
-        # 대신 risk_view_df를 활용하여 아래 표(summary_df)를 구성합니다.
-        summary_df = risk_view_df.copy()
-        summary_df = summary_df.sort_values(["risk_entry_date", "init_days"], ascending=[True, True])
+            # 정렬
+            if "부진재고 진입일" in table_df.columns:
+                table_df = table_df.sort_values(["부진재고 진입일", "예상부진금액"], ascending=[True, False])
 
-        # table_df
-        table_df = summary_df.copy()
-        table_df = table_df.rename(columns={
-            MAT_COL: "자재코드",
-            MAT_NAME_COL: "자재내역",
-            BATCH_COL: "배치",
-            "risk_entry_date": "부진재고 진입일",
-            "remaining_qty": "예상부진재고량",
-            "remaining_amount": "예상부진금액",
-        })
+            # 포맷
+            if "부진재고 진입일" in table_df.columns:
+                table_df["부진재고 진입일"] = pd.to_datetime(table_df["부진재고 진입일"], errors="coerce").dt.strftime("%Y-%m-%d")
 
-        # ✅ minmult_df(자재 단위) 붙이기
-        mult_map = minmult_df[["자재코드", "3평판", "부진재고 0을 위한 최소 배수(추정)", "비고"]].drop_duplicates(subset=["자재코드"])
-        table_df = table_df.merge(mult_map, on="자재코드", how="left")
+            if "예상부진재고량" in table_df.columns:
+                table_df["예상부진재고량"] = (
+                    pd.to_numeric(table_df["예상부진재고량"], errors="coerce")
+                    .fillna(0).astype(int).map(lambda x: f"{x:,}")
+                )
 
-        # ✅ 최소배수 문자열("1.20x") -> float(1.20)로 파싱
-        def parse_multiplier(v):
-            if pd.isna(v):
-                return np.nan
-            s = str(v).strip()
-            # "-", "- (3평판=0)" 같은 케이스
-            if s == "-" or s.startswith("-"):
-                return np.nan
-            m = re.search(r"([0-9]*\.?[0-9]+)\s*x", s.lower())
-            return float(m.group(1)) if m else np.nan
+            if "예상부진금액" in table_df.columns:
+                table_df["예상부진금액"] = (
+                    pd.to_numeric(table_df["예상부진금액"], errors="coerce")
+                    .fillna(0).map(lambda x: f"₩{x:,.0f}")
+                )
 
-        # 1) 숫자형 3평판 확보 (계산용 원본)
-        sales_num = pd.to_numeric(table_df["3평판"], errors="coerce")
+            if "3평판" in table_df.columns:
+                # minmult_df에서 들어온 3평판은 숫자일 수도/문자일 수도 있어서 안전 변환
+                _sales = pd.to_numeric(table_df["3평판"], errors="coerce").fillna(0).astype(int)
+                table_df["3평판"] = _sales.map(lambda x: f"{x:,}")
 
-        # 2) 최소배수 float
-        mult_num = table_df["부진재고 0을 위한 최소 배수(추정)"].apply(parse_multiplier)
+            # ✅ 데이터 테이블 스타일링: Bold 처리 및 다중 색상 강조
+            def highlight_sim_columns(x):
+                df = x.copy()
+                df.loc[:, :] = ''
+                # 그룹 1: 진입일, 금액 (오렌지/옐로우 계열)
+                orange_cols = ['부진재고 진입일', '예상부진금액']
+                # 그룹 2: 권장판매량, 판매개선율 (민트/그린 계열)
+                mint_cols = ['권장 판매량', '판매 개선율(%)']
+                
+                for col in orange_cols:
+                    if col in df.columns:
+                        df.loc[:, col] = 'background-color: #fff3e0'
+                for col in mint_cols:
+                    if col in df.columns:
+                        df.loc[:, col] = 'background-color: #e0f2f1'
+                return df
 
-        # 3) 권장 판매량 / 판매 개선율(%)
-        table_df["권장 판매량"] = (sales_num * mult_num).round(0)
-        table_df["판매 개선율(%)"] = ((mult_num - 1.0) * 100).round(0)
+            styled_table = table_df.style.set_properties(**{'font-weight': 'bold'}).apply(highlight_sim_columns, axis=None)
+            st.dataframe(styled_table, use_container_width=True, height=320)
 
-        # 4) 표시 포맷 (최소배수 없는 애들은 빈칸)
-        table_df["권장 판매량"] = pd.to_numeric(table_df["권장 판매량"], errors="coerce").apply(
-            lambda x: f"{int(x):,}" if pd.notna(x) else "-"
+    # =========================================================
+    # 3) 간트 차트 생성/표시
+    # =========================================================
+    if view_df.empty:
+        st.info("표시할 데이터가 없습니다. (no_sales 제외 후 남은 배치가 없거나, sell_start/end가 비어있을 수 있어요.)")
+    else:
+        view_df = view_df.copy()
+        view_df["expiry_date"] = pd.to_datetime(base_today) + pd.to_timedelta(view_df["init_days"], unit="D")
+
+        sales_bar = view_df.copy()
+        sales_bar["phase"] = "판매기간"
+        sales_bar = sales_bar.rename(columns={"sell_start_date": "x_start", "sell_end_date": "x_end"})
+
+        sluggish_bar = view_df.copy()
+        sluggish_bar = sluggish_bar[sluggish_bar["remaining_qty"].fillna(0) > 0].copy()
+        sluggish_bar = sluggish_bar.dropna(subset=["risk_entry_date", "expiry_date"]).copy()
+        sluggish_bar["phase"] = "부진재고 구간"
+        sluggish_bar = sluggish_bar.rename(columns={"risk_entry_date": "x_start", "expiry_date": "x_end"})
+
+        plot_df = pd.concat([sales_bar, sluggish_bar], ignore_index=True)
+        plot_df["batch_label"] = plot_df["mat_label"].astype(str) + " | " + plot_df[BATCH_COL].astype(str)
+
+        plot_df = plot_df.sort_values(["mat_label", "init_days", "phase"], ascending=[True, True, True])
+
+        color_map = {"판매기간": "#4C78A8", "부진재고 구간": "#E45756"}
+
+        order_base = plot_df[plot_df["phase"] == "판매기간"].copy()
+        if order_base.empty:
+            order_base = plot_df.copy()
+
+        order_meta = (
+            order_base[["batch_label", "mat_label", "x_start"]]
+            .drop_duplicates(subset=["batch_label"])
+            .rename(columns={"x_start": "sell_start"})
         )
-        table_df["판매 개선율(%)"] = pd.to_numeric(table_df["판매 개선율(%)"], errors="coerce").apply(
-            lambda x: f"{int(x)}% 증가" if pd.notna(x) else "-"
+
+        order_meta = order_meta.sort_values(["mat_label", "sell_start", "batch_label"], ascending=[True, True, True])
+        y_order = order_meta["batch_label"].tolist()
+
+        plot_df = plot_df.merge(order_meta[["batch_label", "sell_start"]], on="batch_label", how="left")
+        plot_df = plot_df.sort_values(["mat_label", "sell_start", "phase"], ascending=[True, True, True])
+
+        fig = px.timeline(
+            plot_df,
+            x_start="x_start",
+            x_end="x_end",
+            y="batch_label",
+            color="phase",
+            color_discrete_map=color_map,
+            hover_data={
+                MAT_COL: True,
+                MAT_NAME_COL: True,
+                "소분류": True if "소분류" in plot_df.columns else False,
+                "stop_reason": True if "stop_reason" in plot_df.columns else False,
+                "init_days": True if "init_days" in plot_df.columns else False,
+                "init_qty": True if "init_qty" in plot_df.columns else False,
+                "qty_sold": True if "qty_sold" in plot_df.columns else False,
+                "remaining_qty": True if "remaining_qty" in plot_df.columns else False,
+                "sold_days_total": True if "sold_days_total" in plot_df.columns else False,
+                "risk_entry_date": True if "risk_entry_date" in plot_df.columns else False,
+                "expiry_date": True if "expiry_date" in plot_df.columns else False,
+            },
         )
 
-        # 표시 컬럼
-        show_cols = [
-                    "자재코드",
-                    "자재내역",
-                    "배치",
-                    "3평판",
-                    "부진재고 진입일",
-                    "예상부진재고량",
-                    "예상부진금액",
-                    "권장 판매량",
-                    "판매 개선율(%)",
-                ]
-        show_cols = [c for c in show_cols if c in table_df.columns]
-        table_df = table_df[show_cols].copy()
+        fig.update_yaxes(categoryorder="array", categoryarray=y_order)
+        fig.update_yaxes(autorange="reversed")
 
-        # 정렬
-        if "부진재고 진입일" in table_df.columns:
-            table_df = table_df.sort_values(["부진재고 진입일", "예상부진금액"], ascending=[True, False])
+        # ✅ 배치 수에 따른 동적 높이 계산 (최소 400px, 배치당 30px + 여백)
+        dynamic_height = max(400, len(y_order) * 30 + 120)
 
-        # 포맷
-        if "부진재고 진입일" in table_df.columns:
-            table_df["부진재고 진입일"] = pd.to_datetime(table_df["부진재고 진입일"], errors="coerce").dt.strftime("%Y-%m-%d")
+        fig.update_layout(
+            height=dynamic_height,
+            margin=dict(t=50, b=50, l=10, r=10),
+            xaxis_title="Simulation Timeline",
+            yaxis_title="Material | Batch",
+            xaxis_title_font=dict(size=14),
+            yaxis_title_font=dict(size=14),
+            legend=dict(
+                orientation="h",
+                yanchor="bottom",
+                y=1.02,
+                xanchor="right",
+                x=1
+            ),
+            plot_bgcolor="white",
+            paper_bgcolor="white",
+        )
 
-        if "예상부진재고량" in table_df.columns:
-            table_df["예상부진재고량"] = (
-                pd.to_numeric(table_df["예상부진재고량"], errors="coerce")
-                .fillna(0).astype(int).map(lambda x: f"{x:,}")
-            )
+        fig.update_xaxes(
+            showgrid=True, 
+            gridcolor="#f1f5f9", 
+            gridwidth=1,
+            dtick="M1", # 매달 그리드
+            tickformat="%Y-%m",
+            tickfont=dict(size=12)
+        )
+        fig.update_yaxes(
+            showgrid=True, 
+            gridcolor="#f1f5f9", 
+            gridwidth=1,
+            tickfont=dict(size=11)
+        )
+        
+        # 바 테두리 및 투명도 조절
+        fig.update_traces(marker_line_color='white', marker_line_width=1, opacity=0.9)
 
-        if "예상부진금액" in table_df.columns:
-            table_df["예상부진금액"] = (
-                pd.to_numeric(table_df["예상부진금액"], errors="coerce")
-                .fillna(0).map(lambda x: f"₩{x:,.0f}")
-            )
-
-        if "3평판" in table_df.columns:
-            # minmult_df에서 들어온 3평판은 숫자일 수도/문자일 수도 있어서 안전 변환
-            _sales = pd.to_numeric(table_df["3평판"], errors="coerce").fillna(0).astype(int)
-            table_df["3평판"] = _sales.map(lambda x: f"{x:,}")
-
-        # ✅ 한 표 출력
-        st.dataframe(table_df, use_container_width=True, height=320)
-
-# =========================================================
-# 3) 간트 차트 생성/표시
-# =========================================================
-if view_df.empty:
-    st.info("표시할 데이터가 없습니다. (no_sales 제외 후 남은 배치가 없거나, sell_start/end가 비어있을 수 있어요.)")
-else:
-    view_df = view_df.copy()
-    view_df["expiry_date"] = pd.to_datetime(base_today) + pd.to_timedelta(view_df["init_days"], unit="D")
-
-    sales_bar = view_df.copy()
-    sales_bar["phase"] = "판매기간"
-    sales_bar = sales_bar.rename(columns={"sell_start_date": "x_start", "sell_end_date": "x_end"})
-
-    sluggish_bar = view_df.copy()
-    sluggish_bar = sluggish_bar[sluggish_bar["remaining_qty"].fillna(0) > 0].copy()
-    sluggish_bar = sluggish_bar.dropna(subset=["risk_entry_date", "expiry_date"]).copy()
-    sluggish_bar["phase"] = "부진재고 구간"
-    sluggish_bar = sluggish_bar.rename(columns={"risk_entry_date": "x_start", "expiry_date": "x_end"})
-
-    plot_df = pd.concat([sales_bar, sluggish_bar], ignore_index=True)
-    plot_df["batch_label"] = plot_df["mat_label"].astype(str) + " | " + plot_df[BATCH_COL].astype(str)
-
-    plot_df = plot_df.sort_values(["mat_label", "init_days", "phase"], ascending=[True, True, True])
-
-    color_map = {"판매기간": "#4C78A8", "부진재고 구간": "#E45756"}
-
-    order_base = plot_df[plot_df["phase"] == "판매기간"].copy()
-    if order_base.empty:
-        order_base = plot_df.copy()
-
-    order_meta = (
-        order_base[["batch_label", "mat_label", "x_start"]]
-        .drop_duplicates(subset=["batch_label"])
-        .rename(columns={"x_start": "sell_start"})
-    )
-
-    order_meta = order_meta.sort_values(["mat_label", "sell_start", "batch_label"], ascending=[True, True, True])
-    y_order = order_meta["batch_label"].tolist()
-
-    plot_df = plot_df.merge(order_meta[["batch_label", "sell_start"]], on="batch_label", how="left")
-    plot_df = plot_df.sort_values(["mat_label", "sell_start", "phase"], ascending=[True, True, True])
-
-    fig = px.timeline(
-        plot_df,
-        x_start="x_start",
-        x_end="x_end",
-        y="batch_label",
-        color="phase",
-        color_discrete_map=color_map,
-        hover_data={
-            MAT_COL: True,
-            MAT_NAME_COL: True,
-            "소분류": True if "소분류" in plot_df.columns else False,
-            "stop_reason": True if "stop_reason" in plot_df.columns else False,
-            "init_days": True if "init_days" in plot_df.columns else False,
-            "init_qty": True if "init_qty" in plot_df.columns else False,
-            "qty_sold": True if "qty_sold" in plot_df.columns else False,
-            "remaining_qty": True if "remaining_qty" in plot_df.columns else False,
-            "sold_days_total": True if "sold_days_total" in plot_df.columns else False,
-            "risk_entry_date": True if "risk_entry_date" in plot_df.columns else False,
-            "expiry_date": True if "expiry_date" in plot_df.columns else False,
-        },
-    )
-
-    fig.update_yaxes(categoryorder="array", categoryarray=y_order)
-    fig.update_yaxes(autorange="reversed")
-
-    # ✅ 배치 수에 따른 동적 높이 계산 (최소 400px, 배치당 30px + 여백)
-    dynamic_height = max(400, len(y_order) * 30 + 120)
-
-    fig.update_layout(
-        height=dynamic_height,
-        margin=dict(t=50, b=50, l=10, r=10),
-        xaxis_title="Simulation Timeline",
-        yaxis_title="Material | Batch",
-        xaxis_title_font=dict(size=14),
-        yaxis_title_font=dict(size=14),
-        legend=dict(
-            orientation="h",
-            yanchor="bottom",
-            y=1.02,
-            xanchor="right",
-            x=1
-        ),
-        plot_bgcolor="white",
-        paper_bgcolor="white",
-    )
-
-    fig.update_xaxes(
-        showgrid=True, 
-        gridcolor="#f1f5f9", 
-        gridwidth=1,
-        dtick="M1", # 매달 그리드
-        tickformat="%Y-%m",
-        tickfont=dict(size=12)
-    )
-    fig.update_yaxes(
-        showgrid=True, 
-        gridcolor="#f1f5f9", 
-        gridwidth=1,
-        tickfont=dict(size=11)
-    )
-    
-    # 바 테두리 및 투명도 조절
-    fig.update_traces(marker_line_color='white', marker_line_width=1, opacity=0.9)
-
-    st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, use_container_width=True)
 
 # -----------------------------------------------------
 # 7️⃣ 가공된 데이터 최종 등록 (계층: 연도 -> 월 -> 분석타입) (ON)
