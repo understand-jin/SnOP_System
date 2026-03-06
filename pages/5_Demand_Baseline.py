@@ -8,6 +8,34 @@ import plotly.graph_objects as go
 
 st.set_page_config(page_title="S&OP System - Demand Baseline", layout="wide")
 
+st.markdown("""<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
+.stApp { background-color: #EEF2F7; }
+.main .block-container { padding-top: 1.5rem; padding-bottom: 2rem; padding-left: 2rem; padding-right: 2rem; max-width: 100%; }
+[data-testid="stSidebar"] { background: #0B1E3F !important; border-right: none; }
+[data-testid="stSidebar"] * { color: #94A3B8 !important; }
+[data-testid="stSidebarNav"] { padding: 0.5rem; }
+[data-testid="stSidebarNav"] a { border-radius: 8px; padding: 0.55rem 0.9rem !important; margin-bottom: 2px; font-size: 0.875rem; font-weight: 500; color: #94A3B8 !important; display: block; }
+[data-testid="stSidebarNav"] a:hover { background: rgba(255,255,255,0.08) !important; color: #E2E8F0 !important; }
+[data-testid="stSidebarNav"] a[aria-current="page"] { background: rgba(37,99,235,0.3) !important; color: #FFFFFF !important; font-weight: 600; border-left: 3px solid #3B82F6; }
+[data-testid="stSidebarNav"] span { color: inherit !important; }
+[data-testid="stMetric"] { background: #FFFFFF; border: 1px solid #E2E8F0; border-radius: 10px; padding: 0.9rem 1.1rem; box-shadow: 0 1px 3px rgba(15,23,42,0.04); }
+[data-testid="stMetricValue"] { font-size: 1.7rem !important; font-weight: 800 !important; color: #0F172A !important; }
+[data-testid="stMetricLabel"] { font-size: 0.75rem !important; font-weight: 600 !important; color: #64748B !important; }
+.stButton > button { background-color: #2563EB; color: #FFFFFF; border: none; border-radius: 8px; font-weight: 600; font-size: 0.875rem; padding: 0.5rem 1.1rem; transition: background 0.15s; }
+.stButton > button:hover { background-color: #1D4ED8; }
+[data-testid="stSelectbox"] > div > div { border-radius: 8px; border-color: #CBD5E1; font-size: 0.875rem; }
+.stDataFrame { border-radius: 10px; overflow: hidden; border: 1px solid #E2E8F0; }
+.stTabs [data-baseweb="tab-list"] { gap: 4px; background-color: transparent; border-bottom: 2px solid #E2E8F0; }
+.stTabs [data-baseweb="tab"] { height: 40px; background: #F8FAFC; border-radius: 8px 8px 0 0; color: #64748B; font-weight: 600; font-size: 0.85rem; padding: 8px 16px; border: 1px solid #E2E8F0; border-bottom: none; }
+.stTabs [aria-selected="true"] { background: #FFFFFF !important; color: #2563EB !important; border-bottom: 2px solid #2563EB !important; }
+hr { border: none; border-top: 1px solid #E9EEF5; margin: 1.2rem 0; }
+h1 { font-size: 1.5rem !important; font-weight: 700 !important; color: #1E293B !important; margin-bottom: 0.3rem !important; }
+h2 { font-size: 1.2rem !important; font-weight: 700 !important; color: #1E293B !important; }
+h3 { font-size: 1rem !important; font-weight: 700 !important; color: #374151 !important; }
+</style>""", unsafe_allow_html=True)
+
 st.title("📊 Demand Baseline")
 st.markdown("""
 이 페이지는 **25년 매출실적_Data.xlsx** 파일을 분석하여 채널별 실매출액 및 순매출수량을 집계하고,  
