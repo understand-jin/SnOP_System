@@ -1,3 +1,8 @@
 __pycache__/
 .streamlit/secrets.toml
 *.env
+python/serviceAccountKey.json
+serviceAccountKey.json
+python/sa_env_value.txt
+*.pyc
+.DS_Store

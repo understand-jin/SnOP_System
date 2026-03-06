@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>품절 리스크 분석 - S&OP Dashboard</title>
+  <link rel="stylesheet" href="assets/css/style.css" />
+</head>
+<body>
+<div class="layout">
+
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="sidebar-logo">
+      <div class="logo-title">S&amp;OP Dashboard</div>
+      <div class="logo-sub">SCM Intelligence Platform</div>
+    </div>
+    <nav class="sidebar-nav">
+      <div class="nav-section-label">Overview</div>
+      <a href="index.html" class="nav-item">
+        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/>
+          <rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/>
+        </svg>
+        대시보드
+      </a>
+      <div class="nav-section-label">분석</div>
+      <a href="aging-stock.html" class="nav-item">
+        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
+        </svg>
+        부진재고 분석
+      </a>
+      <a href="stockout.html" class="nav-item active">
+        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="10"/>
+          <line x1="12" y1="8" x2="12" y2="12"/>
+          <line x1="12" y1="16" x2="12.01" y2="16"/>
+        </svg>
+        품절 리스크
+      </a>
+      <div class="nav-section-label">데이터</div>
+      <a href="upload.html" class="nav-item">
+        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+          <polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
+        </svg>
+        데이터 업로드
+      </a>
+    </nav>
+    <div class="sidebar-footer">
+      SCM Innovation TFT<br>
+      © 2026 LEE HYE JIN
+    </div>
+  </aside>
+
+  <!-- Main -->
+  <div class="main">
+
+    <!-- Topbar -->
+    <header class="topbar">
+      <div>
+        <div class="topbar-title">품절 리스크 분석 (Stockout)</div>
+        <div class="topbar-subtitle">재고일수 기반 수급 리스크 모니터링</div>
+      </div>
+      <div class="topbar-right">
+        <div class="period-selector">
+          <label>기준:</label>
+          <select id="selYear"></select>
+          <select id="selMonth"></select>
+        </div>
+        <button class="btn-primary" id="btnLoad">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.75"/>
+          </svg>
+          조회
+        </button>
+      </div>
+    </header>
+
+    <!-- Page Content -->
+    <main class="page-content">
+
+      <!-- KPI -->
+      <div class="kpi-grid" id="stockoutKpi">
+        <div class="loading-state"><div class="spinner"></div></div>
+      </div>
+
+      <!-- Main Content: Table + Chart side by side -->
+      <div class="section card">
+        <div class="card-header">
+          <div class="card-title">
+            <svg class="title-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+              <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+            </svg>
+            전략적 리스크 관리 리스트
+          </div>
+        </div>
+        <div class="card-body">
+          <!-- Filters -->
+          <div class="filter-bar">
+            <span class="filter-label">리스크 등급 필터:</span>
+            <div class="filter-btn-group">
+              <button class="filter-btn active" id="filterAll">전체</button>
+              <button class="filter-btn" id="filterDanger">🚨 위험 (30일 미만)</button>
+              <button class="filter-btn" id="filterWarning">⚠ 주의 (60일 미만)</button>
+            </div>
+          </div>
+
+          <!-- Side by side: table + chart -->
+          <div class="grid-2-1" id="mainContent">
+            <div>
+              <div class="section-title" style="margin-bottom:10px">상세 리스트</div>
+              <div id="stockoutTable">
+                <div class="loading-state"><div class="spinner"></div></div>
+              </div>
+            </div>
+            <div>
+              <div class="section-title" style="margin-bottom:10px">재고 리스크 시각화</div>
+              <div class="chart-container tall" id="stockoutChart"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </main>
+  </div>
+</div>
+
+<!-- Firebase SDK -->
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+<!-- ECharts -->
+<script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+<!-- App scripts -->
+<script src="assets/js/firebase-config.js"></script>
+<script src="assets/js/common.js"></script>
+<script src="assets/js/stockout.js"></script>
+</body>
+</html>

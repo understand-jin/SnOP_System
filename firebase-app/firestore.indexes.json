@@ -1,0 +1,27 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "aging_inventory",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "남은일", "order": "ASCENDING" },
+        { "fieldPath": "기말금액", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "forecasted",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "예측부진재고금액", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "stockout",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "재고일수", "order": "ASCENDING" }
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}

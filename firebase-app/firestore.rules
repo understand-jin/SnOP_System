@@ -1,0 +1,14 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Allow read access to all documents (internal dashboard)
+    match /reports/{docId} {
+      allow read: if true;
+      allow write: if false; // Write only via Admin SDK (Python uploader)
+    }
+    match /reports/{docId}/{subcollection}/{subDoc} {
+      allow read: if true;
+      allow write: if false;
+    }
+  }
+}
