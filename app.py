@@ -1,19 +1,18 @@
+import re
 import streamlit as st
 import pandas as pd
 from datetime import datetime
 from pathlib import Path
-from utils import load_stock_csv, load_stockout_csv
 
 st.set_page_config(page_title="S&OP Dashboard", layout="wide", initial_sidebar_state="expanded")
 
-# ── 대시보드 CSS ──────────────────────────────────────────────────
+# ── CSS ──────────────────────────────────────────────────────────────
 st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
 
 html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
 
-/* ── 전체 배경 ── */
 .stApp { background-color: #EEF2F7; }
 .main .block-container {
     padding-top: 0 !important;
@@ -97,7 +96,7 @@ html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
 }
 @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:0.4; } }
 
-/* ── 패널 공통 ── */
+/* ── 패널 ── */
 .panel {
     background: #FFFFFF;
     border-radius: 12px;
@@ -122,7 +121,6 @@ html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
     align-items: center;
     gap: 8px;
 }
-.panel-body { padding: 1.2rem 1.3rem; }
 
 /* ── KPI 카드 ── */
 .kpi-card {
@@ -159,11 +157,7 @@ html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
 .kpi-value.info    { color: #2563EB; }
 .kpi-value.success { color: #059669; }
 .kpi-unit { font-size: 0.9rem; font-weight: 600; color: #94A3B8; margin-left: 3px; }
-.kpi-sub {
-    font-size: 0.72rem;
-    color: #94A3B8;
-    margin-top: 0.3rem;
-}
+.kpi-sub { font-size: 0.72rem; color: #94A3B8; margin-top: 0.3rem; }
 
 /* ── 상태 배지 ── */
 .badge {
@@ -224,25 +218,6 @@ html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
     margin-top: auto;
 }
 
-/* ── 필터 바 ── */
-.filter-bar {
-    background: #FFFFFF;
-    border: 1px solid #E2E8F0;
-    border-radius: 10px;
-    padding: 0.75rem 1.2rem;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    margin-bottom: 1.2rem;
-    box-shadow: 0 1px 3px rgba(15,23,42,0.04);
-}
-.filter-label {
-    font-size: 0.78rem;
-    font-weight: 600;
-    color: #475569;
-    white-space: nowrap;
-}
-
 /* ── Streamlit 위젯 보정 ── */
 [data-testid="stMetric"] {
     background: #FFFFFF; border: 1px solid #E2E8F0;
@@ -265,7 +240,6 @@ html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
 }
 .stDataFrame { border-radius: 10px; overflow: hidden; border: 1px solid #E2E8F0; }
 
-/* 섹션 라벨 */
 .section-label {
     font-size: 0.7rem;
     font-weight: 700;
@@ -280,7 +254,7 @@ hr { border: none; border-top: 1px solid #E9EEF5; margin: 1.2rem 0; }
 </style>
 """, unsafe_allow_html=True)
 
-# ── 헤더 배너 ────────────────────────────────────────────────────
+# ── 헤더 배너 ─────────────────────────────────────────────────────────
 now_str = datetime.now().strftime("%Y.%m.%d %H:%M")
 st.markdown(f"""
 <div class="dash-header">
@@ -298,75 +272,129 @@ st.markdown(f"""
 </div>
 """, unsafe_allow_html=True)
 
-# ── 조회 기간 필터 ────────────────────────────────────────────────
+# ── 기간 선택 ──────────────────────────────────────────────────────────
+DATA_ROOT = Path("data")
+
+def _month_num(s: str) -> int:
+    m = re.search(r'\d+', s)
+    return int(m.group()) if m else 0
+
+def _year_num(s: str) -> int:
+    m = re.search(r'\d{4}', s)
+    return int(m.group()) if m else 0
+
+def get_available_periods():
+    periods = []
+    if DATA_ROOT.exists():
+        for year_dir in DATA_ROOT.iterdir():
+            if year_dir.is_dir() and re.search(r'\d{4}', year_dir.name):
+                for month_dir in year_dir.iterdir():
+                    if month_dir.is_dir() and re.search(r'\d+', month_dir.name):
+                        periods.append((year_dir.name, month_dir.name))
+    return periods
+
+avail_periods = get_available_periods()
+avail_years   = sorted({y for y, _ in avail_periods}, key=_year_num, reverse=True)
+
 c_filter1, c_filter2, c_spacer = st.columns([0.9, 0.9, 5])
 with c_filter1:
-    selected_year = st.selectbox(
-        "연도",
-        options=[f"{y}년" for y in range(2023, 2041)],
-        index=range(2023, 2041).index(2025),
-        label_visibility="collapsed"
-    )
+    year_opts = avail_years if avail_years else [f"{y}년" for y in range(2023, 2041)]
+    selected_year = st.selectbox("연도", options=year_opts, index=0, label_visibility="collapsed")
 with c_filter2:
-    selected_month = st.selectbox(
-        "월",
-        options=[f"{m}월" for m in range(1, 13)],
-        index=11,
-        label_visibility="collapsed"
+    month_opts = sorted(
+        [m for y, m in avail_periods if y == selected_year],
+        key=_month_num
     )
+    if not month_opts:
+        month_opts = [f"{m}월" for m in range(1, 13)]
+    selected_month = st.selectbox("월", options=month_opts, index=len(month_opts) - 1, label_visibility="collapsed")
 with c_spacer:
+    total_periods = len(avail_periods)
+    latest = (
+        f"{avail_years[0]} {sorted([m for y,m in avail_periods if y==avail_years[0]], key=_month_num)[-1]}"
+        if avail_years else "-"
+    )
     st.markdown(f"""
-    <div style="display:flex; align-items:center; height:38px; gap:8px; color:#64748B; font-size:0.8rem;">
+    <div style="display:flex; align-items:center; height:38px; gap:16px; color:#64748B; font-size:0.8rem;">
         <span style="color:#94A3B8;">📅</span>
-        <b style="color:#1E293B;">{selected_year} {selected_month}</b> 데이터 기준 리스크 현황
+        <b style="color:#1E293B;">{selected_year} {selected_month}</b>
+        <span style="color:#94A3B8;">데이터 기준 리스크 현황</span>
+        <span style="background:#EFF6FF; color:#3B82F6; font-size:0.7rem; font-weight:600;
+                     padding:0.2rem 0.6rem; border-radius:20px; border:1px solid #BFDBFE;">
+            📁 {total_periods}개 기간 보유
+        </span>
     </div>
     """, unsafe_allow_html=True)
 
-# ── 데이터 로드 ──────────────────────────────────────────────────
-stock_df    = None
-stockout_df = None
+# ── 데이터 로드 ────────────────────────────────────────────────────────
+inv_path = DATA_ROOT / selected_year / selected_month / "inventory.csv"
+inv_df = None
 try:
-    stock_df    = load_stock_csv(selected_year, selected_month)
-    stockout_df = load_stockout_csv(selected_year, selected_month)
+    if inv_path.exists():
+        inv_df = pd.read_csv(inv_path, encoding="utf-8-sig")
 except Exception:
     pass
 
-# ── Stockout 계산 ─────────────────────────────────────────────────
-if stockout_df is not None:
-    risk_red    = stockout_df[stockout_df["재고일수"] < 30]
-    risk_orange = stockout_df[(stockout_df["재고일수"] >= 30) & (stockout_df["재고일수"] < 60)]
-    total_mat   = len(stockout_df)
-    n_danger    = len(risk_red)
-    n_warning   = len(risk_orange)
-else:
-    total_mat = n_danger = n_warning = "-"
+# ── Stockout 계산 (inventory.csv → 재고일수) ──────────────────────────
+n_danger = n_warning = total_mat = "-"
+if inv_df is not None:
+    try:
+        from inventory_utils2 import stock_out
+        so_df = stock_out(inv_df)
+        so_df["기말수량"] = pd.to_numeric(so_df["기말수량"], errors="coerce").fillna(0)
+        so_df["3평판"]   = pd.to_numeric(so_df["3평판"],   errors="coerce").fillna(0)
 
-# ── Aging Stock 계산 ─────────────────────────────────────────────
-if stock_df is not None:
-    BUCKET_COL = "expiry_bucket"
-    VALUE_COL  = "Stock Value on Period End"
-    def get_aging_metrics(buckets):
-        sub = stock_df[stock_df[BUCKET_COL].isin(buckets)]
-        return sub["배치"].nunique(), sub[VALUE_COL].sum()
+        agg = (
+            so_df.groupby("자재코드", as_index=False)
+            .agg(기말수량=("기말수량", "sum"), 판매평균=("3평판", "first"))
+        )
+        agg["재고일수"] = agg.apply(
+            lambda r: r["기말수량"] / (r["판매평균"] / 30.0) if r["판매평균"] > 0 else 999.0,
+            axis=1
+        )
+        total_mat = len(agg)
+        n_danger  = int((agg["재고일수"] < 30).sum())
+        n_warning = int(((agg["재고일수"] >= 30) & (agg["재고일수"] < 60)).sum())
+    except Exception:
+        pass
 
-    risk_6  = ["폐기확정(유효기한 지남)", "1개월 미만", "2개월 미만", "3개월 미만", "4개월 미만", "5개월 미만", "6개월 미만"]
-    risk_7  = ["7개월 미만"]
-    risk_9  = ["8개월 미만", "9개월 미만"]
-    risk_12 = ["10개월 미만", "11개월 미만", "12개월 미만"]
+# ── Aging Stock 계산 (inventory.csv → 유효기한구간) ───────────────────
+m6_c = m7_c = m9_c = m12_c = "-"
+aging_v6_fmt = aging_v7_fmt = aging_v9_fmt = aging_v12_fmt = "-"
 
-    m6_c,  m6_v  = get_aging_metrics(risk_6)
-    m7_c,  m7_v  = get_aging_metrics(risk_7)
-    m9_c,  m9_v  = get_aging_metrics(risk_9)
-    m12_c, m12_v = get_aging_metrics(risk_12)
-    aging_v6_fmt  = f"₩{m6_v/1e8:,.1f}억"  if isinstance(m6_v,  (int,float)) else "-"
-    aging_v7_fmt  = f"₩{m7_v/1e8:,.1f}억"  if isinstance(m7_v,  (int,float)) else "-"
-    aging_v9_fmt  = f"₩{m9_v/1e8:,.1f}억"  if isinstance(m9_v,  (int,float)) else "-"
-    aging_v12_fmt = f"₩{m12_v/1e8:,.1f}억" if isinstance(m12_v, (int,float)) else "-"
-else:
-    m6_c = m7_c = m9_c = m12_c = "-"
-    aging_v6_fmt = aging_v7_fmt = aging_v9_fmt = aging_v12_fmt = "-"
+if inv_df is not None and "유효기한구간" in inv_df.columns:
+    try:
+        BUCKET_COL = "유효기한구간"
+        VALUE_COL  = "기말금액"
 
-# ── KPI 요약 카드 (상단 4개) ──────────────────────────────────────
+        inv_df[VALUE_COL] = pd.to_numeric(inv_df[VALUE_COL], errors="coerce").fillna(0)
+
+        def _aging_metrics(buckets):
+            sub = inv_df[inv_df[BUCKET_COL].isin(buckets)]
+            return (
+                sub["배치"].nunique() if "배치" in sub.columns else len(sub),
+                sub[VALUE_COL].sum()
+            )
+
+        risk_6  = ["폐기확정(유효기한 지남)", "1개월 미만", "2개월 미만",
+                   "3개월 미만", "4개월 미만", "5개월 미만", "6개월 미만"]
+        risk_7  = ["7개월 미만"]
+        risk_9  = ["8개월 미만", "9개월 미만"]
+        risk_12 = ["10개월 미만", "11개월 미만", "12개월 미만"]
+
+        m6_c,  m6_v  = _aging_metrics(risk_6)
+        m7_c,  m7_v  = _aging_metrics(risk_7)
+        m9_c,  m9_v  = _aging_metrics(risk_9)
+        m12_c, m12_v = _aging_metrics(risk_12)
+
+        aging_v6_fmt  = f"₩{m6_v/1e8:,.1f}억"
+        aging_v7_fmt  = f"₩{m7_v/1e8:,.1f}억"
+        aging_v9_fmt  = f"₩{m9_v/1e8:,.1f}억"
+        aging_v12_fmt = f"₩{m12_v/1e8:,.1f}억"
+    except Exception:
+        pass
+
+# ── KPI 상단 4개 ───────────────────────────────────────────────────────
 st.markdown('<div class="section-label">핵심 리스크 현황</div>', unsafe_allow_html=True)
 
 k1, k2, k3, k4 = st.columns(4)
@@ -401,11 +429,10 @@ with k4:
 
 st.markdown("<div style='height:1.2rem'></div>", unsafe_allow_html=True)
 
-# ── 상세 KPI 패널 (두 열) ─────────────────────────────────────────
+# ── 상세 KPI 패널 (두 열) ──────────────────────────────────────────────
 left_col, right_col = st.columns([1, 1], gap="medium")
 
 with left_col:
-    # Stockout 패널
     st.markdown("""
     <div class="panel">
         <div class="panel-header">
@@ -414,7 +441,7 @@ with left_col:
         </div>
     </div>""", unsafe_allow_html=True)
 
-    if stockout_df is not None:
+    if inv_df is not None:
         s1, s2, s3 = st.columns(3)
         with s1:
             st.markdown(f"""
@@ -438,10 +465,9 @@ with left_col:
                 <div class="kpi-sub">분석 자재 수</div>
             </div>""", unsafe_allow_html=True)
     else:
-        st.info(f"{selected_year} {selected_month} Stockout 데이터 없음")
+        st.info(f"{selected_year} {selected_month} inventory 데이터 없음")
 
 with right_col:
-    # Aging Stock 패널
     st.markdown("""
     <div class="panel">
         <div class="panel-header">
@@ -450,13 +476,13 @@ with right_col:
         </div>
     </div>""", unsafe_allow_html=True)
 
-    if stock_df is not None:
+    if inv_df is not None and "유효기한구간" in inv_df.columns:
         a1, a2 = st.columns(2)
         a3, a4 = st.columns(2)
         aging_rows = [
-            (a1, "danger",  "⚠️ 6개월 미만", aging_v6_fmt,  f"배치 {m6_c}건"),
-            (a2, "warning", "🔔 7개월 미만", aging_v7_fmt,  f"배치 {m7_c}건"),
-            (a3, "info",    "ℹ️ 9개월 미만", aging_v9_fmt,  f"배치 {m9_c}건"),
+            (a1, "danger",  "⚠️ 6개월 미만",  aging_v6_fmt,  f"배치 {m6_c}건"),
+            (a2, "warning", "🔔 7개월 미만",  aging_v7_fmt,  f"배치 {m7_c}건"),
+            (a3, "info",    "ℹ️ 9개월 미만",  aging_v9_fmt,  f"배치 {m9_c}건"),
             (a4, "success", "📅 12개월 미만", aging_v12_fmt, f"배치 {m12_c}건"),
         ]
         for col, cls, label, val, sub in aging_rows:
@@ -471,20 +497,79 @@ with right_col:
         st.info(f"{selected_year} {selected_month} Aging 데이터 없음")
 
 st.markdown("<div style='height:0.8rem'></div>", unsafe_allow_html=True)
+
+# ── 데이터 현황 요약 ────────────────────────────────────────────────────
+st.markdown("<hr>", unsafe_allow_html=True)
+st.markdown('<div class="section-label">데이터 현황</div>', unsafe_allow_html=True)
+
+base_dir = DATA_ROOT / selected_year / selected_month
+file_checks = [
+    ("inventory.csv",              "재고 현황",      "📋"),
+    ("forecasted_inventory.csv",   "예측 부진재고",  "🔮"),
+    ("simulation.csv",             "FEFO 시뮬레이션","⚙️"),
+    ("major_management_inventory.csv", "중점관리 품목","⭐"),
+    ("소진계획.csv",                "소진계획",       "📝"),
+]
+
+fc_cols = st.columns(len(file_checks))
+for i, (fname, label, icon) in enumerate(file_checks):
+    fpath = base_dir / fname
+    with fc_cols[i]:
+        if fpath.exists():
+            try:
+                size_kb = fpath.stat().st_size / 1024
+                row_count = sum(1 for _ in open(fpath, encoding="utf-8-sig")) - 1
+            except Exception:
+                size_kb = 0
+                row_count = 0
+            st.markdown(f"""
+            <div style="background:#FFFFFF; border:1px solid #D1FAE5; border-top:3px solid #10B981;
+                        border-radius:10px; padding:0.85rem 1rem; text-align:center;">
+                <div style="font-size:1.1rem;">{icon}</div>
+                <div style="font-size:0.75rem; font-weight:700; color:#1E293B; margin:4px 0 2px;">{label}</div>
+                <div style="font-size:0.68rem; color:#16A34A; font-weight:600;">✓ 존재</div>
+                <div style="font-size:0.65rem; color:#94A3B8; margin-top:2px;">{row_count:,}행 · {size_kb:.1f}KB</div>
+            </div>""", unsafe_allow_html=True)
+        else:
+            st.markdown(f"""
+            <div style="background:#FFFFFF; border:1px solid #FEE2E2; border-top:3px solid #EF4444;
+                        border-radius:10px; padding:0.85rem 1rem; text-align:center; opacity:0.7;">
+                <div style="font-size:1.1rem;">{icon}</div>
+                <div style="font-size:0.75rem; font-weight:700; color:#1E293B; margin:4px 0 2px;">{label}</div>
+                <div style="font-size:0.68rem; color:#DC2626; font-weight:600;">✗ 없음</div>
+                <div style="font-size:0.65rem; color:#94A3B8; margin-top:2px;">{fname}</div>
+            </div>""", unsafe_allow_html=True)
+
 st.markdown("<hr>", unsafe_allow_html=True)
 
-# ── 모듈 네비게이션 ───────────────────────────────────────────────
+# ── 모듈 네비게이션 ─────────────────────────────────────────────────────
 st.markdown('<div class="section-label">분석 모듈 바로가기</div>', unsafe_allow_html=True)
 
 modules = [
-    {"name": "Data Upload",         "icon": "📥", "color": "#DBEAFE", "path": "/Data_Upload",         "desc": "Excel/SAP 리포트 업로드 및 표준화"},
-    {"name": "Table Manager",       "icon": "📋", "color": "#F3E8FF", "path": "/Table_Manager",       "desc": "마스터 데이터 조회 및 관리"},
-    {"name": "Aging Stock Analysis","icon": "📦", "color": "#FEF3C7", "path": "/Aging_Stock_Analysis","desc": "유효기한 기반 부진재고 리스크 분석"},
-    {"name": "Stockout Analysis",   "icon": "🚨", "color": "#FEE2E2", "path": "/Stockout_Analysis",   "desc": "재고일수 기반 수급 리스크 모니터링"},
-    {"name": "Demand Baseline",     "icon": "📈", "color": "#D1FAE5", "path": "/Demand_Baseline",     "desc": "수요 예측 및 통계 분석"},
+    {
+        "name": "Aging Stock Analysis",
+        "icon": "📦",
+        "color": "#FEF3C7",
+        "path": "/1_Aging_Stock",
+        "desc": "유효기한 기반 부진재고 리스크 분석 · FEFO 시뮬레이션 · 소진계획 수립",
+    },
+    {
+        "name": "소진계획 입력",
+        "icon": "📝",
+        "color": "#D1FAE5",
+        "path": "/2_Depletion_Plan",
+        "desc": "중점관리 대상 품목의 월별 소진 목표 수량 입력 및 관리",
+    },
+    {
+        "name": "Stockout Analysis",
+        "icon": "🚨",
+        "color": "#FEE2E2",
+        "path": "/3_Stockout",
+        "desc": "재고일수 기반 품절 리스크 모니터링 · 위험/주의 자재 현황",
+    },
 ]
 
-m_cols = st.columns(5)
+m_cols = st.columns(len(modules))
 for i, m in enumerate(modules):
     with m_cols[i]:
         st.markdown(f"""
@@ -497,7 +582,7 @@ for i, m in enumerate(modules):
             </div>
         </a>""", unsafe_allow_html=True)
 
-# ── 푸터 ──────────────────────────────────────────────────────────
+# ── 푸터 ────────────────────────────────────────────────────────────────
 st.markdown("<div style='height:2rem'></div>", unsafe_allow_html=True)
 st.markdown("""
 <div style="display:flex; justify-content:space-between; align-items:center;

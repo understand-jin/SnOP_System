@@ -78,45 +78,94 @@ html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
 .info-item { font-size: 0.78rem; color: #64748B; }
 .info-item strong { color: #1E293B; font-weight: 700; }
 .info-divider { width: 1px; height: 14px; background: #E2E8F0; }
-.legend-swatch {
-    display: inline-block; width: 12px; height: 12px;
-    border-radius: 2px; vertical-align: middle; margin-right: 4px;
-}
 
-/* ── 그리드 헤더 ── */
-.gh {
-    font-size: 0.68rem; font-weight: 700; color: #64748B;
-    text-transform: uppercase; letter-spacing: 0.4px;
-    text-align: center; padding: 5px 3px;
-    background: #F8FAFC; border-radius: 4px;
-    border-bottom: 2px solid #E2E8F0;
-}
-.gh-month { color: #1D4ED8; background: #EFF6FF; border-bottom-color: #3B82F6; }
-.gh-risk  { color: #B45309; background: #FFFBEB; border-bottom-color: #F59E0B; }
-
-/* ── 정보 셀 ── */
-.cell { font-size: 0.8rem; color: #374151; padding: 6px 3px; line-height: 1.35; }
-.cell-code { font-size: 0.82rem; font-weight: 700; color: #1E293B; }
-.cell-name { font-size: 0.8rem; color: #1E293B; font-weight: 700; }
-.cell-batch { font-size: 0.78rem; color: #64748B; font-weight: 500; }
-.cell-num { font-size: 0.82rem; font-weight: 600; color: #1E293B; text-align: right; }
-
-/* 유효기한 색상 */
+/* ── 유효기한 색상 ── */
 .exp-danger { font-size: 0.78rem; font-weight: 700; color: #DC2626; }
 .exp-warn   { font-size: 0.78rem; font-weight: 700; color: #D97706; }
 .exp-ok     { font-size: 0.78rem; font-weight: 600; color: #374151; }
 
 /* ── 6개월 진입 배지 ── */
-.rb-now  { display:inline-block; background:#FEE2E2; color:#B91C1C; border:1px solid #FECACA; border-radius:4px; padding:2px 9px; font-size:0.75rem; font-weight:700; letter-spacing:0.2px; }
-.rb-soon { display:inline-block; background:#FEF3C7; color:#92400E; border:1px solid #FDE68A; border-radius:4px; padding:2px 9px; font-size:0.75rem; font-weight:700; letter-spacing:0.2px; }
-.rb-ok   { display:inline-block; background:#DBEAFE; color:#1E40AF; border:1px solid #BFDBFE; border-radius:4px; padding:2px 9px; font-size:0.75rem; font-weight:700; letter-spacing:0.2px; }
+.rb-now  { display:inline-block; background:#FEE2E2; color:#B91C1C; border:1px solid #FECACA; border-radius:4px; padding:2px 9px; font-size:0.75rem; font-weight:700; }
+.rb-soon { display:inline-block; background:#FEF3C7; color:#92400E; border:1px solid #FDE68A; border-radius:4px; padding:2px 9px; font-size:0.75rem; font-weight:700; }
+.rb-ok   { display:inline-block; background:#DBEAFE; color:#1E40AF; border:1px solid #BFDBFE; border-radius:4px; padding:2px 9px; font-size:0.75rem; font-weight:700; }
 .rb-none { font-size:0.72rem; color:#94A3B8; }
 
+/* ── 버킷 구분 ── */
+.bucket-bar {
+    display: flex; align-items: center; gap: 10px;
+    margin: 20px 0 8px 0;
+    color: #94A3B8;
+}
+.bucket-bar::before, .bucket-bar::after {
+    content: ''; flex: 1;
+    height: 1px; background: #E2E8F0;
+}
+.bucket-bar span {
+    font-size: 0.68rem; font-weight: 600;
+    color: #94A3B8; white-space: nowrap;
+    letter-spacing: 0.5px;
+}
+
+/* ── Timeline 카드 메타 헤더 ── */
+.tl-meta {
+    background: linear-gradient(135deg, #F8FAFC 0%, #FFFFFF 100%);
+    border: 1.5px solid #E2E8F0;
+    border-left: 4px solid #3B82F6;
+    border-radius: 8px 8px 0 0;
+    padding: 9px 16px;
+    display: flex;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-top: 4px;
+}
+.tl-code  { font-size: 0.82rem; font-weight: 800; color: #1E293B; font-family: 'Courier New', monospace; background:#EFF6FF; padding:1px 6px; border-radius:4px; }
+.tl-name  { font-size: 0.85rem; font-weight: 700; color: #1E293B; }
+.tl-batch { font-size: 0.74rem; color: #64748B; font-weight: 500; background:#F1F5F9; padding:1px 6px; border-radius:4px; }
+.tl-sep   { color: #CBD5E1; font-size: 0.8rem; }
+.tl-lbl   { font-size: 0.67rem; font-weight: 600; color: #94A3B8; text-transform: uppercase; letter-spacing: 0.3px; margin-right: 2px; }
+.tl-val   { font-size: 0.78rem; font-weight: 700; color: #1E293B; }
+.tl-info  { font-size: 0.78rem; color: #374151; }
+.tl-tag-risk   { display:inline-block; background:#FEF3C7; color:#92400E; border:1px solid #FDE68A; border-radius:4px; padding:1px 7px; font-size:0.7rem; font-weight:700; }
+.tl-tag-expire { display:inline-block; background:#FEE2E2; color:#B91C1C; border:1px solid #FECACA; border-radius:4px; padding:1px 7px; font-size:0.7rem; font-weight:700; }
+
+/* ── Timeline strip 월 레이블 ── */
+.tl-month-label {
+    text-align: center;
+    padding: 4px 2px 3px 2px;
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.3px;
+    line-height: 1.3;
+    border-radius: 4px 4px 0 0;
+}
+.tl-lbl-normal { color: #1D4ED8; background: #EFF6FF; border: 2px solid #93C5FD; border-bottom: none; }
+.tl-lbl-risk   { color: #9A3412; background: #FFF7ED; border: 2px solid #FB923C; border-bottom: none; }
+.tl-lbl-expire { color: #B91C1C; background: #FEF2F2; border: 2px solid #FCA5A5; border-bottom: none; }
+.tl-lbl-dead   { color: #9CA3AF; background: #F3F4F6; border: 2px solid #E5E7EB; border-bottom: none; }
+.tl-lbl-note   { color: #64748B; background: #F8FAFC; border: 2px solid #E2E8F0; border-bottom: none; }
+
+/* ── 폐기후 셀 ── */
+.tl-dead-cell {
+    font-size: 0.72rem; font-weight: 600;
+    color: #9CA3AF; background: #F3F4F6;
+    border: 2px solid #E5E7EB;
+    border-radius: 0 0 5px 5px;
+    text-align: center; padding: 7px 0;
+}
+
+/* ── 행 구분선 ── */
+.row-sep { border: none; border-top: 1px solid #E2E8F0; margin: 10px 0 4px 0; }
+
 /* ── 입력 칸 (기본 — 정상 구간) ── */
+div[data-testid="stNumberInput"] {
+    margin-top: -4px !important;
+}
 div[data-testid="stNumberInput"] > div {
     background-color: #EFF6FF !important;
     border: 2px solid #93C5FD !important;
-    border-radius: 6px !important;
+    border-radius: 0 0 6px 6px !important;
+    border-top: none !important;
 }
 div[data-testid="stNumberInput"] > div:focus-within {
     border-color: #2563EB !important;
@@ -133,28 +182,17 @@ div[data-testid="stNumberInput"] input {
 }
 div[data-testid="stNumberInput"] button { display: none !important; }
 
-/* ── 비활성 / 폐기 마커 ── */
-.mark-expire { font-size:0.72rem; font-weight:600; color:#9CA3AF; background:#F3F4F6; border:1px solid #E5E7EB; border-radius:5px; text-align:center; padding:6px 0; }
-.mark-dead   { font-size:0.72rem; font-weight:700; color:#DC2626; background:#FEF2F2; border:1px solid #FECACA; border-radius:5px; text-align:center; padding:6px 0; }
-
 /* ── 비고 입력 ── */
+div[data-testid="stTextInput"] {
+    margin-top: -4px !important;
+}
 div[data-testid="stTextInput"] > div {
-    border-radius: 6px !important;
-    border-color: #D1D5DB !important;
-    background: #FAFAFA !important;
+    border-radius: 0 0 6px 6px !important;
+    border-top: none !important;
+    border-color: #E2E8F0 !important;
+    background: #F8FAFC !important;
 }
 div[data-testid="stTextInput"] input { font-size: 0.78rem !important; color: #374151 !important; }
-
-/* ── 버킷 구분 ── */
-.bucket-bar {
-    background: #FFFBEB; border-left: 4px solid #F59E0B;
-    padding: 5px 12px; border-radius: 0 6px 6px 0;
-    margin: 12px 0 5px 0;
-    font-size: 0.78rem; font-weight: 700; color: #92400E;
-}
-
-/* ── 행 구분선 ── */
-.row-sep { border: none; border-top: 1px solid #F1F5F9; margin: 3px 0; }
 
 /* ── 버튼 ── */
 .stButton > button {
@@ -176,7 +214,6 @@ from datetime import datetime as _dt
 target_year  = st.session_state.get("plan_target_year", "")
 target_month = st.session_state.get("plan_target_month", "")
 
-# 세션에 연도/월이 없으면 직접 선택
 if not target_year or not target_month:
     _cy = _dt.now().year
     _cm = _dt.now().month
@@ -192,7 +229,6 @@ if not target_year or not target_month:
 target_dir = st.session_state.get("plan_target_dir") or os.path.join("data", target_year, target_month)
 ref_label  = f"{target_year} {target_month}"
 
-# major_df: 세션 → 저장된 CSV 순으로 로드
 major_df = st.session_state.get("major_management_df")
 if major_df is None or major_df.empty:
     _csv_path = os.path.join(target_dir, "major_management_inventory.csv")
@@ -221,7 +257,6 @@ st.markdown(f"""
 </div>
 """, unsafe_allow_html=True)
 
-# 데이터 없는 경우
 if major_df is None or major_df.empty:
     st.error("중점관리 대상 품목 데이터가 없습니다. Aging Stock 페이지에서 분석을 먼저 실행하세요.")
     if st.button("Aging Stock 으로 돌아가기"):
@@ -276,7 +311,6 @@ c4.metric("계획 기간",
 
 st.markdown("<div style='height:0.8rem'></div>", unsafe_allow_html=True)
 
-# 정보 바
 st.markdown(f"""
 <div class="info-bar">
   <div class="info-item">데이터 기준&nbsp; <strong>{ref_label}</strong></div>
@@ -284,13 +318,9 @@ st.markdown(f"""
   <div class="info-item">소진계획 시작&nbsp; <strong style="color:#2563EB;">{month_labels[0] if month_labels else '-'}</strong>&nbsp; (기준월 다음달)</div>
   <div class="info-divider"></div>
   <div class="info-item">
-    <span class="legend-swatch" style="background:#F0F7FF;border:2px solid #93C5FD;"></span>
-    파란 칸 = 소진 수량 직접 입력
-  </div>
-  <div class="info-divider"></div>
-  <div class="info-item">
-    <span class="legend-swatch" style="background:#FEF3C7;border:1px solid #FDE68A;"></span>
-    노란 마커 = 6개월 미만 진입 시점
+    <span style="display:inline-block;width:11px;height:11px;background:#EFF6FF;border:2px solid #93C5FD;border-radius:2px;vertical-align:middle;margin-right:4px;"></span>정상&nbsp;&nbsp;
+    <span style="display:inline-block;width:11px;height:11px;background:#FFF7ED;border:2px solid #FB923C;border-radius:2px;vertical-align:middle;margin-right:4px;"></span>⚠ 6개월 위험&nbsp;&nbsp;
+    <span style="display:inline-block;width:11px;height:11px;background:#FEF2F2;border:2px solid #FCA5A5;border-radius:2px;vertical-align:middle;margin-right:4px;"></span>💀 폐기월
   </div>
 </div>
 """, unsafe_allow_html=True)
@@ -310,54 +340,35 @@ existing_plan = {}
 if os.path.exists(plan_csv_path):
     try:
         existing_df = pd.read_csv(plan_csv_path, encoding="utf-8-sig")
-        for _, row in existing_df.iterrows():
-            existing_plan[(str(row["자재코드"]), str(row["배치"]))] = row
+        for _, erow in existing_df.iterrows():
+            batch_key = str(erow["배치"]) if "배치" in existing_df.columns else ""
+            existing_plan[(str(erow["자재코드"]), batch_key)] = erow
     except Exception:
         pass
 
 ###############################################################################
-# 컬럼 너비
-# 자재코드 | 자재내역 | 배치 | 유효기한 | 기말수량 | 기말금액 | 6개월진입 | 각월... | 비고
+# 세팅
 ###############################################################################
 bucket_col = "유효기한구간" if "유효기한구간" in major_df.columns else None
 sort_cols  = ["남은일"] if "남은일" in major_df.columns else []
 rows_df    = major_df.sort_values(sort_cols) if sort_cols else major_df
 
-META_W = [0.9, 2.0, 0.95, 0.95, 0.75, 0.85, 1.05]
-PLAN_W = [0.78] * len(all_months)
-NOTE_W = [1.2]
-all_widths = META_W + PLAN_W + NOTE_W
+MONTH_STRIP_WIDTHS = [1.0] * len(all_months) + [1.5]  # 마지막 = 비고
 
 ###############################################################################
-# 그리드 헤더
+# 섹션 라벨
 ###############################################################################
-st.markdown('<div class="section-label">월별 소진수량 입력</div>', unsafe_allow_html=True)
-
-FIXED_HEADERS = ["자재코드", "자재내역", "배치", "유효기한", "기말수량", "기말금액(원)", "6개월 진입일"]
-all_headers   = FIXED_HEADERS + month_labels + ["비고"]
-
-hcols = st.columns(all_widths)
-for htxt, hcol in zip(all_headers, hcols):
-    if htxt in month_labels:
-        css = "gh gh-month"
-    elif htxt == "6개월 진입일":
-        css = "gh gh-risk"
-    else:
-        css = "gh"
-    hcol.markdown(f'<div class="{css}">{htxt}</div>', unsafe_allow_html=True)
-
-st.markdown("<div style='height:3px; background:linear-gradient(90deg,#1E40AF,#3B82F6,#7C3AED); border-radius:2px; margin:4px 0 8px 0;'></div>",
-            unsafe_allow_html=True)
+st.markdown('<div class="section-label">월별 소진계획 Timeline</div>', unsafe_allow_html=True)
 
 ###############################################################################
-# 입력 그리드
+# Timeline 렌더링
 ###############################################################################
-plan_inputs  = {}
-last_bucket  = None
-risk_zone_labels   = []   # 6개월 미만 구간 — 주황 CSS 주입용
-expire_zone_labels = []   # 폐기 당월 — 빨간 CSS 주입용
+plan_inputs        = {}
+last_bucket        = None
+risk_zone_labels   = []
+expire_zone_labels = []
 
-for _, row in rows_df.iterrows():
+for row_idx, (_, row) in enumerate(rows_df.iterrows()):
     bucket     = str(row.get(bucket_col, "")) if bucket_col else ""
     mat_code   = str(row.get("자재코드", ""))
     mat_name   = str(row.get("자재내역", ""))
@@ -370,15 +381,13 @@ for _, row in rows_df.iterrows():
     expiry_dt  = pd.to_datetime(expiry_raw, errors="coerce")
     expiry_str = expiry_dt.strftime("%Y-%m-%d") if pd.notna(expiry_dt) else "-"
 
-    # 6개월 진입일 / 폐기 시점 계산
+    # 위험 날짜 계산
     if pd.notna(days_left):
-        risk6_ts      = today + pd.Timedelta(days=int(days_left) - 180)
-        expiry_ts     = today + pd.Timedelta(days=int(days_left))
-        risk6_month   = f"{int(risk6_ts.month)}월"
-        expire_month  = f"{int(expiry_ts.month)}월"
+        risk6_ts       = today + pd.Timedelta(days=int(days_left) - 180)
+        expiry_ts      = today + pd.Timedelta(days=int(days_left))
         risk6_month_ts = pd.Timestamp(year=risk6_ts.year,  month=risk6_ts.month,  day=1)
         expire_month_ts= pd.Timestamp(year=expiry_ts.year, month=expiry_ts.month, day=1)
-        days_to_risk6 = (risk6_ts - today).days
+        days_to_risk6  = (risk6_ts - today).days
 
         if days_to_risk6 <= 0:
             risk6_badge = f'<span class="rb-now">{risk6_ts.strftime("%Y.%m.%d")}</span>'
@@ -388,98 +397,138 @@ for _, row in rows_df.iterrows():
             risk6_badge = f'<span class="rb-ok">{risk6_ts.strftime("%Y.%m.%d")}</span>'
     else:
         risk6_ts = expiry_ts = None
-        risk6_month = expire_month = ""
         risk6_month_ts = expire_month_ts = None
         risk6_badge = '<span class="rb-none">-</span>'
 
     # 버킷 구분선
     if bucket != last_bucket:
         last_bucket = bucket
-        st.markdown(f'<div class="bucket-bar">{bucket}</div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="bucket-bar"><span>{bucket}</span></div>', unsafe_allow_html=True)
 
-    rcols = st.columns(all_widths)
-
-    # ── 고정 정보 셀 ──────────────────────────────────────────────
-    rcols[0].markdown(f'<div class="cell cell-code">{mat_code}</div>', unsafe_allow_html=True)
-    rcols[1].markdown(f'<div class="cell cell-name">{mat_name}</div>', unsafe_allow_html=True)
-    rcols[2].markdown(f'<div class="cell cell-batch">{batch}</div>', unsafe_allow_html=True)
+    # 표시 형식
+    qty_str = f"{float(qty):,.0f}" if qty not in ("", None) else "-"
+    try:
+        amt_val = float(amt)
+        amt_str = f"₩{amt_val/1e8:,.2f}억" if amt_val >= 1e7 else f"₩{amt_val:,.0f}"
+    except Exception:
+        amt_str = "-"
 
     if pd.notna(days_left):
         exp_cls = "exp-danger" if days_left < 180 else ("exp-warn" if days_left < 270 else "exp-ok")
     else:
         exp_cls = "exp-ok"
-    rcols[3].markdown(f'<div class="cell {exp_cls}">{expiry_str}</div>', unsafe_allow_html=True)
 
-    qty_str = f"{float(qty):,.0f}" if qty != "" and qty is not None else "-"
-    amt_str = f"{float(amt):,.0f}" if amt != "" and amt is not None else "-"
-    rcols[4].markdown(f'<div class="cell cell-num">{qty_str}</div>', unsafe_allow_html=True)
-    rcols[5].markdown(f'<div class="cell cell-num">{amt_str}</div>', unsafe_allow_html=True)
-    rcols[6].markdown(f'<div style="padding-top:4px;">{risk6_badge}</div>', unsafe_allow_html=True)
+    # 구간 태그
+    risk_cnt = sum(
+        1 for m in all_months
+        if risk6_month_ts is not None and expire_month_ts is not None
+        and m >= risk6_month_ts and m < expire_month_ts
+    )
+    has_expire = expire_month_ts is not None and expire_month_ts >= plan_start and expire_month_ts <= end
 
-    # ── 월별 입력 칸 ─────────────────────────────────────────────
+    risk_tag   = f'<span class="tl-tag-risk">⚠ 위험 {risk_cnt}개월</span>' if risk_cnt > 0 else ""
+    expire_tag = f'<span class="tl-tag-expire">💀 {int(expire_month_ts.month)}월 폐기</span>' if has_expire else ""
+
+    # ── 카드 메타 헤더 ────────────────────────────────────────────
+    st.markdown(f"""
+    <div class="tl-meta">
+      <span class="tl-code">{mat_code}</span>
+      <span class="tl-sep">│</span>
+      <span class="tl-name">{mat_name}</span>
+      <span class="tl-sep">│</span>
+      <span class="tl-batch">배치 {batch}</span>
+      <span class="tl-sep">│</span>
+      <span class="tl-info"><span class="tl-lbl">유효기한</span><span class="{exp_cls}">{expiry_str}</span></span>
+      <span class="tl-sep">│</span>
+      <span class="tl-info"><span class="tl-lbl">기말수량</span><span class="tl-val">{qty_str}</span></span>
+      <span class="tl-sep">│</span>
+      <span class="tl-info"><span class="tl-lbl">금액</span><span class="tl-val">{amt_str}</span></span>
+      <span class="tl-sep">│</span>
+      <span class="tl-info"><span class="tl-lbl">6개월진입</span>{risk6_badge}</span>
+      {risk_tag}{expire_tag}
+    </div>
+    """, unsafe_allow_html=True)
+
+    # ── Timeline strip + 입력 ────────────────────────────────────
     plan_inputs[(mat_code, batch)] = {}
+    mcols = st.columns(MONTH_STRIP_WIDTHS)
 
     for mi, (mcol_ts, mlabel) in enumerate(zip(all_months, month_labels)):
-        col_idx = len(META_W) + mi
-
-        # 폐기 다음 월 이후 — 비활성
         is_after_expiry = (expire_month_ts is not None and mcol_ts > expire_month_ts)
-        if is_after_expiry:
-            rcols[col_idx].markdown('<div class="mark-expire">-</div>', unsafe_allow_html=True)
-            plan_inputs[(mat_code, batch)][mlabel] = 0
-            continue
+        is_expire_month = (expire_month_ts is not None and mcol_ts == expire_month_ts)
+        is_risk_zone    = (risk6_month_ts  is not None and expire_month_ts is not None
+                           and mcol_ts >= risk6_month_ts and mcol_ts < expire_month_ts)
 
-        # 기존 저장값
-        saved_val = 0.0
-        saved_row = existing_plan.get((mat_code, batch))
-        if saved_row is not None and mlabel in saved_row:
-            try:
-                saved_val = float(saved_row[mlabel])
-            except Exception:
-                saved_val = 0.0
+        with mcols[mi]:
+            if is_after_expiry:
+                st.markdown(f'<div class="tl-month-label tl-lbl-dead">{mlabel}</div>',
+                            unsafe_allow_html=True)
+                st.markdown('<div class="tl-dead-cell">—</div>', unsafe_allow_html=True)
+                plan_inputs[(mat_code, batch)][mlabel] = 0
+                continue
 
-        input_label = f"_{mat_code}_{batch}_{mlabel}"
+            # 레이블 색상
+            if is_expire_month:
+                lbl_cls  = "tl-lbl-expire"
+                lbl_text = f"💀 {mlabel}"
+            elif is_risk_zone:
+                lbl_cls  = "tl-lbl-risk"
+                lbl_text = f"⚠ {mlabel}"
+            else:
+                lbl_cls  = "tl-lbl-normal"
+                lbl_text = mlabel
 
-        # 구간 분류 (CSS 주입용 키 수집)
-        is_risk_zone   = (risk6_month_ts  is not None and mcol_ts >= risk6_month_ts
-                          and mcol_ts < expire_month_ts)
-        is_expire_month= (expire_month_ts is not None and mcol_ts == expire_month_ts)
+            st.markdown(f'<div class="tl-month-label {lbl_cls}">{lbl_text}</div>',
+                        unsafe_allow_html=True)
 
-        if is_risk_zone:
-            risk_zone_labels.append(input_label)
-        elif is_expire_month:
-            expire_zone_labels.append(input_label)
+            input_label = f"_{mat_code}_{batch}_{mlabel}"
+            if is_risk_zone:
+                risk_zone_labels.append(input_label)
+            elif is_expire_month:
+                expire_zone_labels.append(input_label)
 
-        val = rcols[col_idx].number_input(
-            label=input_label,
-            min_value=0.0,
-            value=saved_val,
-            step=1.0,
-            label_visibility="collapsed",
-            key=f"dp_{mat_code}_{batch}_{mlabel}"
-        )
-        plan_inputs[(mat_code, batch)][mlabel] = val
+            # 기존 저장값
+            saved_val = 0.0
+            saved_row = existing_plan.get((mat_code, batch))
+            if saved_row is not None and mlabel in saved_row:
+                try:
+                    saved_val = float(saved_row[mlabel])
+                except Exception:
+                    saved_val = 0.0
+
+            val = st.number_input(
+                label=input_label,
+                min_value=0.0,
+                value=saved_val,
+                step=1.0,
+                label_visibility="collapsed",
+                key=f"dp_{row_idx}_{mat_code}_{batch}_{mlabel}"
+            )
+            plan_inputs[(mat_code, batch)][mlabel] = val
 
     # ── 비고 ─────────────────────────────────────────────────────
-    saved_note = ""
-    saved_row = existing_plan.get((mat_code, batch))
-    if saved_row is not None and "비고" in saved_row:
-        saved_note = str(saved_row["비고"])
+    with mcols[-1]:
+        st.markdown('<div class="tl-month-label tl-lbl-note">비고</div>',
+                    unsafe_allow_html=True)
+        saved_row = existing_plan.get((mat_code, batch))
+        saved_note = ""
+        if saved_row is not None and "비고" in saved_row:
+            raw_note = str(saved_row["비고"])
+            saved_note = "" if raw_note == "nan" else raw_note
 
-    note_val = rcols[-1].text_input(
-        label=f"note_{mat_code}_{batch}",
-        value=saved_note,
-        placeholder="소진 전략 메모",
-        label_visibility="collapsed",
-        key=f"note_{mat_code}_{batch}"
-    )
+        note_val = st.text_input(
+            label=f"note_{mat_code}_{batch}",
+            value=saved_note,
+            placeholder="소진 전략 메모",
+            label_visibility="collapsed",
+            key=f"note_{row_idx}_{mat_code}_{batch}"
+        )
     plan_inputs[(mat_code, batch)]["__note__"] = note_val
 
     st.markdown('<hr class="row-sep">', unsafe_allow_html=True)
 
 ###############################################################################
 # 리스크 구간 CSS 주입 (그리드 렌더링 완료 후)
-# `:has()` 선택자로 aria-label 기준 개별 입력 칸 스타일링
 ###############################################################################
 def _css_sel(labels, extra=""):
     return ", ".join(
@@ -489,7 +538,6 @@ def _css_sel(labels, extra=""):
 
 css_parts = []
 
-# 6개월 미만 구간 — 주황
 if risk_zone_labels:
     css_parts.append(f"""
     {_css_sel(risk_zone_labels, " > div")} {{
@@ -501,7 +549,6 @@ if risk_zone_labels:
     }}
     """)
 
-# 폐기 당월 — 빨강
 if expire_zone_labels:
     css_parts.append(f"""
     {_css_sel(expire_zone_labels, " > div")} {{
@@ -528,10 +575,10 @@ with col_save:
     if st.button("소진계획 전체 저장", type="primary", use_container_width=True):
         save_rows = []
         for (mat_code, batch), month_vals in plan_inputs.items():
-            row_data = major_df[
-                (major_df["자재코드"].astype(str) == mat_code) &
-                (major_df["배치"].astype(str) == batch)
-            ]
+            mask = major_df["자재코드"].astype(str) == mat_code
+            if "배치" in major_df.columns and batch:
+                mask &= major_df["배치"].astype(str) == batch
+            row_data = major_df[mask]
             if row_data.empty:
                 continue
             row_info = row_data.iloc[0]

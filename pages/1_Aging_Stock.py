@@ -395,9 +395,9 @@ if st.session_state.get("aging_result_df") is not None:
 
             # 주요 컬럼 순서 정리 후 표시
             _ordered = ["자재코드", "자재내역", "대분류", "소분류", "배치",
-                        "기말수량", "기말금액", "단가",
+                        "기말수량", "기말금액", "단가", "3평판",
                         "예측부진재고", "예측부진재고금액",
-                        "유효기한", "남은일", "유효기한구간", "3평판"]
+                        "유효기한", "남은일", "유효기한구간"]
             _show_cols = [c for c in _ordered if c in major_management_df.columns]
             # 정의되지 않은 나머지 컬럼도 뒤에 추가
             _extra = [c for c in major_management_df.columns if c not in _show_cols]
@@ -433,7 +433,7 @@ if st.session_state.get("aging_result_df") is not None:
                 st.session_state["plan_target_year"] = target_year
                 st.session_state["plan_target_month"] = target_month
                 if st.button("소진계획 입력 →", type="primary", use_container_width=True):
-                    st.switch_page("pages/8_Depletion_Plan.py")
+                    st.switch_page("pages/2_Depletion_Plan.py")
         else:
             st.info("중점관리 대상으로 선정된 품목이 없습니다.")
     except ImportError:
@@ -798,27 +798,6 @@ else:
 
         # ── 수량 바차트 ────────────────────────────────────────────────
         sub_v_ren = sub_v.rename(columns={"remaining_qty": "예측부진재고"})
-        sub_sorted2 = sub_v_ren.sort_values("init_days", ascending=False).reset_index(drop=True)
-        fig2 = go.Figure([
-            go.Bar(name="판매량",     x=sub_sorted2["batch_label"], y=sub_sorted2["qty_sold"],
-                   marker_color="#4C78A8", opacity=0.9,
-                   hovertemplate="판매량: %{y:,.0f}<extra></extra>"),
-            go.Bar(name="잔량(부진)", x=sub_sorted2["batch_label"], y=sub_sorted2["예측부진재고"],
-                   marker_color="#E45756", opacity=0.85,
-                   hovertemplate="예측부진재고: %{y:,.0f}<extra></extra>"),
-        ])
-        fig2.update_layout(
-            title="배치별 판매량 vs 잔량(부진재고)",
-            xaxis_title="배치", yaxis_title="수량",
-            barmode="stack",
-            plot_bgcolor="white", paper_bgcolor="white",
-            xaxis=dict(gridcolor="#f1f5f9", tickangle=-30),
-            yaxis=dict(gridcolor="#f1f5f9"),
-            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-            height=340, margin=dict(l=60, r=30, t=55, b=80),
-        )
-        fig2.update_traces(marker_line_color="white", marker_line_width=1)
-        st.plotly_chart(fig2, use_container_width=True)
 
         # ── 상세 테이블 ─────────────────────────────────────────────────
         cols_show = ["배치", "init_qty", "init_days", "risk_entry_date",

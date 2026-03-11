@@ -120,6 +120,8 @@ def aging_inventory_preprocess(cost_df, standard_df, expiration_df, sales_df, cl
     standard_df["3평판"] = standard_df["자재코드"].map(sales_avg).fillna(0)
     
     standard_df = standard_df[["자재코드", "자재내역", "플랜트", "특별재고", "저장위치", "배치", "기말수량", "기말금액", "단가", "대분류", "소분류", "유효기한", "남은일", "유효기한구간", "3평판"]]
+    standard_df = standard_df.reset_index(drop=True) 
+    standard_df.insert(0, "인덱스", standard_df.index + 1)
 
     return standard_df
 
@@ -147,6 +149,7 @@ def simulate_batches_by_product(df: pd.DataFrame, risk_days: int = 180, step_day
         # 배치별 상태 배열
         n               = len(g)
         batches_id      = g["배치"].tolist()
+        batches_orig_idx = g["인덱스"].tolist()  # '인덱스' 컬럼 값 저장
         batches_init_days = g["남은일"].tolist()
         batches_init_qty  = g["기말수량"].tolist()
         qty             = list(batches_init_qty)
@@ -277,10 +280,7 @@ def simulate_batches_by_product(df: pd.DataFrame, risk_days: int = 180, step_day
             })
 
         for k in range(n):
-            updated.loc[
-                (updated["자재코드"] == mat) & (updated["배치"] == batches_id[k]),
-                "예측부진재고"
-            ] = qty[k]
+            updated.loc[updated["인덱스"] == batches_orig_idx[k], "예측부진재고"] = qty[k]
 
     updated["예측부진재고금액"] = updated["예측부진재고"] * updated["단가"]
 
@@ -344,6 +344,20 @@ def picking_major_management_inventory(df):
 
     major_management_df = major_management_df[major_management_df["예측부진재고"] > 0]
 
+    major_management_df = major_management_df.groupby("자재코드").agg(**{
+    "자재내역": ("자재내역", "first"),
+    "대분류": ("대분류", "first"),
+    "소분류": ("소분류", "first"),
+    "기말수량": ("기말수량", "sum"),
+    "기말금액": ("기말금액", "sum"),
+    "단가": ("단가", "first"),
+    "유효기한": ("유효기한", "first"),
+    "3평판": ("3평판", "first"),
+    "남은일": ("남은일", "first"),
+    "유효기한구간": ("유효기한구간", "first"),
+    "예측부진재고": ("예측부진재고", "sum"),
+    "예측부진재고금액": ("예측부진재고금액", "sum"),}).reset_index()
+
     return major_management_df
 
 
@@ -380,3 +394,20 @@ def depletion_rate(df1, df2):
     result["소진율"] = result["소진율"].clip(upper=1.0)
 
     return result
+
+def stock_out(df):
+    """
+    standard_df를 input
+    재고일수 계산해서 품절재고 관리 페이지 표시를 위한 df 만드는 함수 
+    """
+    stockout_df = df[["자재코드", "자재내역", "3평판", "기말수량"]].copy()
+    stockout_df["재고일수"] = stockout_df["기말수량"] / stockout_df["3평판"]
+    
+    stockout_df["현황"] = stockout_df["재고일수"].apply(
+        lambda x: "위험" if x < 30 else ("주의" if x < 60 else "")
+    )
+    
+    return stockout_df
+    
+    
+
