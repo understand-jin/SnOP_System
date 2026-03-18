@@ -403,7 +403,15 @@ if st.session_state.get("aging_result_df") is not None:
             _extra = [c for c in major_management_df.columns if c not in _show_cols]
             disp_major = major_management_df[_show_cols + _extra].copy()
 
-            # 숫자 컬럼 포맷
+            # 숫자 및 날짜 컬럼 포맷팅 (화면 표시용)
+            for col in ["기말수량", "기말금액", "단가", "3평판", "예측부진재고", "예측부진재고금액"]:
+                if col in disp_major.columns:
+                    disp_major[col] = disp_major[col].map(lambda x: f"{x:,.0f}" if pd.notna(x) else "")
+            
+            if "유효기한" in disp_major.columns:
+                disp_major["유효기한"] = pd.to_datetime(disp_major["유효기한"], errors="coerce").dt.strftime("%Y-%m-%d")
+
+            # 색상 강조 로직
             def _hl_major(s):
                 styles = pd.DataFrame("", index=s.index, columns=s.columns)
                 for col in ["예측부진재고", "예측부진재고금액"]:
@@ -654,8 +662,17 @@ else:
     
     # 잔량 필터
     show_nonzero = st.checkbox("잔량 > 0 만 보기", value=False, key="updated_nonzero")
-    view_upd = grouped_upd[grouped_upd["예측부진재고"] > 0] if show_nonzero else grouped_upd
+    view_upd = (grouped_upd[grouped_upd["예측부진재고"] > 0] if show_nonzero else grouped_upd).copy()
     
+    # 숫자 및 날짜 컬럼 포맷팅 (화면 표시용)
+    for col in ["기말수량", "기말금액", "단가", "3평판", "예측부진재고", "예측부진재고금액", "권장판매량"]:
+        if col in view_upd.columns:
+            view_upd[col] = view_upd[col].map(lambda x: f"{x:,.0f}" if pd.notna(x) and isinstance(x, (int, float)) else x)
+    
+    for col in ["유효기한", "유효 기한"]:
+        if col in view_upd.columns:
+            view_upd[col] = pd.to_datetime(view_upd[col], errors="coerce").dt.strftime("%Y-%m-%d")
+
     # 색상 강조 로직
     def highlight_cols(s):
         styles = pd.DataFrame('', index=s.index, columns=s.columns)

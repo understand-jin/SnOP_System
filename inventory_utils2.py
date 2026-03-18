@@ -121,7 +121,10 @@ def aging_inventory_preprocess(cost_df, standard_df, expiration_df, sales_df, cl
     
     standard_df = standard_df[["자재코드", "자재내역", "플랜트", "특별재고", "저장위치", "배치", "기말수량", "기말금액", "단가", "대분류", "소분류", "유효기한", "남은일", "유효기한구간", "3평판"]]
     standard_df = standard_df.reset_index(drop=True) 
+    standard_df["저장위치"] = pd.to_numeric(standard_df["저장위치"], errors="coerce").astype("Int64")
+    standard_df["남은일"] = pd.to_numeric(standard_df["남은일"], errors="coerce").astype("Int64")
     standard_df.insert(0, "인덱스", standard_df.index + 1)
+    standard_df = filter_special_stock(standard_df)
 
     return standard_df
 
@@ -409,5 +412,17 @@ def stock_out(df):
     
     return stockout_df
     
+def filter_special_stock(df: pd.DataFrame, mat_col: str = "자재코드", special_stock_col: str = "특별재고") -> pd.DataFrame:
+    """
+    자재코드가 '1'로 시작하지 않고(원료 아님) AND 특별재고가 None/NaN/빈값이 아닌 행 제거 (특별재고 처리 로직)
+    """
+    if mat_col not in df.columns or special_stock_col not in df.columns:
+        return df
     
+    is_not_raw      = ~df[mat_col].astype(str).str.startswith("1")
+    is_special_stk  = ~df[special_stock_col].isna() & \
+                      ~df[special_stock_col].astype(str).str.strip().str.lower().isin(["none", "nan", ""])
+    
+    return df[~(is_not_raw & is_special_stk)].reset_index(drop=True)
+
 
